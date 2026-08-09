@@ -81,12 +81,33 @@
 
   </div>
 
+  <!-- Multi-Device Output Tabs -->
+  <div id="output-tabs" class="mt-6 flex space-x-2 hidden"></div>
+
   <!-- Run Command Output Box -->
-<div id="run-output-container"
-     class="mt-6 border rounded bg-white p-4 h-200 overflow-auto hidden">
-  <h3 id="run-output-title" class="font-semibold mb-2"></h3>
-  <pre id="run-output" class="whitespace-pre-wrap text-sm"></pre>
-</div>
+  <div id="run-output-container"
+      class="border rounded bg-white p-4 h-[500px] overflow-auto hidden resize-y">
+
+    <!-- Menu Bar -->
+    <div class="flex justify-between items-center mb-2">
+      <div id="run-output-title" class="font-semibold"></div>
+
+      <div class="space-x-2">
+        <button onclick="copyRunOutput()" class="bg-gray-600 text-white px-3 py-1 rounded">
+          Copy
+        </button>
+        <button onclick="saveRunOutput()" class="bg-gray-600 text-white px-3 py-1 rounded">
+          Save
+        </button>
+        <button onclick="clearRunOutput()" class="bg-red-600 text-white px-3 py-1 rounded">
+          Clear
+        </button>
+      </div>
+    </div>
+
+    <pre id="run-output" class="whitespace-pre-wrap text-sm"></pre>
+  </div>
+
 
 
   <!-- Terminal stays full width -->
@@ -105,6 +126,31 @@
   let fitAddon = null;
   let selectedDeviceId = "";
   let selectedDeviceName = "";
+  let commandHistory = [];
+  let historyIndex = -1;
+  let deviceOutputs = {};     // deviceId → output text
+  let activeDeviceTab = null; // currently selected tab
+
+  document.getElementById("command-input").addEventListener("keydown", function(e) {
+    if (e.key === "ArrowUp") {
+      if (historyIndex > 0) {
+        historyIndex--;
+        this.value = commandHistory[historyIndex];
+      }
+      e.preventDefault();
+    }
+
+    if (e.key === "ArrowDown") {
+      if (historyIndex < commandHistory.length - 1) {
+        historyIndex++;
+        this.value = commandHistory[historyIndex];
+      } else {
+        this.value = "";
+      }
+      e.preventDefault();
+    }
+  });
+
 
   // ---------------------------
   // Initialize Xterm.js Terminal
@@ -149,10 +195,14 @@
 
     const arrow = document.getElementById("device-dropdown-arrow");
     arrow.textContent = "▲";
-    document.getElementById("run-output").textContent = "";
-    document.getElementById("run-output-title").textContent = "";
+  
+    // // Create tab if not exists
+    // if (!deviceOutputs[deviceId]) {
+    //   deviceOutputs[deviceId] = "";
+    //   addDeviceTab(deviceId, deviceName);
+    // }
 
-
+    // switchToDeviceTab(deviceId);
   }
 
   function getSelectedDevice() {
@@ -163,12 +213,8 @@
   // Run Command (HTTP)
   // ---------------------------
   async function runCommand() {
-    // Hide terminal, show run-output box
-    document.getElementById("terminal-container").classList.add("hidden");
-    document.getElementById("run-output-container").classList.remove("hidden");
-
     const deviceId = getSelectedDevice();
-    const deviceName = selectedDeviceName; 
+    const deviceName = selectedDeviceName;
     const cmd = document.getElementById("command-input").value;
 
     if (!deviceId) {
@@ -176,9 +222,14 @@
       return;
     }
 
-     document.getElementById("run-output-title").textContent = `${deviceName}# ${cmd}`;
+    // Create tab ONLY if it does not exist
+    if (!document.getElementById(`tab-${deviceId}`)) {
+      deviceOutputs[deviceId] = "";
+      addDeviceTab(deviceId, deviceName);
+    }
 
-    document.getElementById("run-output").textContent = "";
+    // Switch to this device's tab
+    switchToDeviceTab(deviceId);
 
     const resp = await fetch(`/connector/${deviceId}/run`, {
       method: "POST",
@@ -187,10 +238,18 @@
     });
 
     const data = await resp.json();
-    const outBox = document.getElementById("run-output");
-    outBox.textContent += `\n${data.output}\n`;
 
+    // Append output
+    deviceOutputs[deviceId] += `\n${deviceName}# ${cmd}\n${data.output}\n`;
+
+    // Update UI
+    const outBox = document.getElementById("run-output");
+    outBox.textContent = deviceOutputs[deviceId];
+    outBox.scrollTop = outBox.scrollHeight;
   }
+
+
+
 
   // ---------------------------
   // Start Interactive (WebSocket)
@@ -253,6 +312,46 @@
       }
     }
   });
+
+  function addDeviceTab(deviceId, deviceName) {
+    const tabs = document.getElementById("output-tabs");
+    tabs.classList.remove("hidden");
+
+    const tab = document.createElement("button");
+    tab.id = `tab-${deviceId}`;
+    tab.textContent = deviceName;
+    tab.className = "px-3 py-1 rounded bg-gray-200 hover:bg-gray-300";
+    tab.onclick = () => switchToDeviceTab(deviceId);
+
+    tabs.appendChild(tab);
+  }
+
+function switchToDeviceTab(deviceId) {
+  activeDeviceTab = deviceId;
+
+  // Update selected device name
+  selectedDeviceName = document.getElementById(`tab-${deviceId}`).textContent;
+
+  // Highlight active tab
+  document.querySelectorAll("#output-tabs button").forEach(btn => {
+    btn.classList.remove("bg-blue-500", "text-white");
+    btn.classList.add("bg-gray-200");
+  });
+
+  const activeBtn = document.getElementById(`tab-${deviceId}`);
+  activeBtn.classList.remove("bg-gray-200");
+  activeBtn.classList.add("bg-blue-500", "text-white");
+
+  // Show output box
+  document.getElementById("run-output-container").classList.remove("hidden");
+  document.getElementById("terminal-container").classList.add("hidden");
+
+  // Load output for this device
+  document.getElementById("run-output").textContent = deviceOutputs[deviceId];
+  // document.getElementById("run-output-title").textContent = selectedDeviceName;
+}
+
+
 </script>
 
 
@@ -305,6 +404,37 @@ function selectDevice(element, deviceId, deviceName) {
   items.forEach(li => li.classList.remove("bg-blue-100"));
   element.classList.add("bg-blue-100");
 }
+
+function clearRunOutput() {
+  if (!activeDeviceTab) return;
+
+  // Clear stored output for this device
+  deviceOutputs[activeDeviceTab] = "";
+
+  // Clear UI output
+  document.getElementById("run-output").textContent = "";
+
+}
+
+function copyRunOutput() {
+  const text = document.getElementById("run-output").textContent;
+  navigator.clipboard.writeText(text);
+}
+
+function saveRunOutput() {
+  const text = document.getElementById("run-output").textContent;
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${selectedDeviceName}_output.txt`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+
 
 </script>
 
