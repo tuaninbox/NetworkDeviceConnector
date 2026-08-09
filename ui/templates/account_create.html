@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="text-2xl font-bold mb-6 text-center">Create Account</h1>
+
+<!-- Centered form container with same left/right gap as tables -->
+<div class="mt-6 px-4 flex justify-center">
+  <div class="bg-white p-6 rounded shadow-md w-full max-w-xl">
+
+    <form method="post" action="/ui/accounts/create">
+
+      
+      <label>Username</label>
+      <input name="username" class="border px-3 py-2 rounded w-full mb-4" required>
+
+      <label>Password</label>
+      <input name="password" type="password" class="border px-3 py-2 rounded w-full mb-4" required>
+       <p id="password_error" class="text-red-600 mb-4 hidden">
+        Passwords do not match.
+      </p>
+
+      <label class="block mb-2">Confirm Password</label>
+      <input name="confirm_password" type="password" class="border px-3 py-2 rounded w-full mb-4" required>
+
+      <label>Role</label>
+      <select name="role" class="border px-3 py-2 rounded w-full mb-4">
+        <option value="user">User</option>
+        <option value="operator">Operator</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <label>First Name</label>
+      <input name="first_name" class="border px-3 py-2 rounded w-full mb-4">
+
+      <label>Last Name</label>
+      <input name="last_name" class="border px-3 py-2 rounded w-full mb-4">
+
+      <label>Email</label>
+      <input name="email" type="email" class="border px-3 py-2 rounded w-full mb-4">
+
+      <label>Source</label>
+      <select name="source" class="border px-3 py-2 rounded w-full mb-4">
+        <option value="local">Local</option>
+        <option value="ldap">LDAP</option>
+        <option value="saml">SAML</option>
+      </select>
+
+      <label>Profiles (comma separated)</label>
+      <input name="profiles" class="border px-3 py-2 rounded w-full mb-4">
+
+      <button class="bg-blue-600 text-white px-4 py-2 rounded">Create Account</button>
+    </form>
+
+
+    </form>
+
+  </div>
+</div>
+
+
+<script>
+function validatePasswords() {
+  const pw = document.getElementById("password").value;
+  const cpw = document.getElementById("confirm_password").value;
+  const error = document.getElementById("password_error");
+
+  if (pw !== cpw) {
+    error.classList.remove("hidden");
+    return false; // stop form submission
+  }
+
+  error.classList.add("hidden");
+  return true; // allow form submission
+}
+</script>
+
+{% endblock %}

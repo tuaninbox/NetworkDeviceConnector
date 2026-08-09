@@ -1,0 +1,15 @@
+<div class="modal bg-white p-4 rounded shadow">
+  <p>Are you sure you want to delete request {{ req.id }}?</p>
+
+  <button
+    hx-delete="/ui/requests/{{ req.id }}"
+    hx-target="#requests-table"
+    class="bg-red-600 text-white px-3 py-1 rounded mt-3">
+    Yes, delete
+  </button>
+
+  <button onclick="document.getElementById('modal').innerHTML=''"
+    class="px-3 py-1 bg-gray-300 rounded mt-3">
+    Cancel
+  </button>
+</div>

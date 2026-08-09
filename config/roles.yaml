@@ -1,0 +1,15 @@
+roles:
+  admin:
+    - read_devices
+    - read_accounts
+    - create_accounts
+    - update_accounts
+    - delete_accounts
+    - read_logs
+
+  operator:
+    - read_devices
+    - read_accounts
+
+  user:
+    - read_devices

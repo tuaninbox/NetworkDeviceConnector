@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="text-xl font-bold mb-4">Edit My Account</h1>
+
+{% if error %}
+<div class="mb-4 bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded">
+  {{ error }}
+</div>
+{% endif %}
+
+<form method="post" class="bg-white p-6 rounded shadow-md max-w-xl">
+
+  <label class="block mb-2">Username</label>
+  <input name="username" value="{{ user.username }}" class="w-full border px-3 py-2 rounded mb-4">
+
+  <label class="block mb-2">Email</label>
+  <input name="email" value="{{ user.email }}" type="email" class="w-full border px-3 py-2 rounded mb-4">
+
+  <label class="block mb-2">Current Password</label>
+  <input name="current_password" type="password" class="w-full border px-3 py-2 rounded mb-4">
+
+  <label class="block mb-2">New Password</label>
+  <input name="new_password" type="password" class="w-full border px-3 py-2 rounded mb-4">
+
+  <label class="block mb-2">Confirm Password</label>
+  <input name="confirm_password" type="password" class="w-full border px-3 py-2 rounded mb-4">
+
+  <div class="flex justify-end space-x-3">
+    <a href="/ui/account/{{ user.id }}" class="px-4 py-2 bg-gray-300 rounded">Cancel</a>
+    <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save</button>
+  </div>
+</form>
+
+
+{% endblock %}

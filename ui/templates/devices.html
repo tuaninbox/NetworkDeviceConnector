@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Xterm.js CSS + JS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+<script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm/lib/addons/fit/fit.js"></script>
+
+<h1 class="text-2xl font-bold mb-6 text-center">Device Connector</h1>
+
+<div class="px-4">
+
+
+
+  <!-- Two-column layout -->
+  <div class="flex flex-col md:flex-row md:space-x-6">
+  <!-- Device Selector -->
+    <div class="mb-4 md:w-1/3">
+      <div class="border rounded bg-white">
+
+        <!-- Collapsible header -->
+        <button onclick="toggleDeviceDropdown()"
+                class="w-full text-left px-3 py-2 font-semibold border-b flex justify-between items-center">
+          <span id="device-selector-title">Select a device to run command on</span>
+          <span id="device-dropdown-arrow" class="text-xl">▼</span>
+        </button>
+
+        <!-- Dropdown content -->
+        <div id="device-dropdown" class="hidden p-3 space-y-3" onclick="event.stopPropagation()">
+
+          <!-- Search inside dropdown -->
+          <input id="device-search"
+                type="text"
+                placeholder="Search devices..."
+                class="border px-3 py-2 rounded w-full"
+                onkeyup="filterDeviceList()">
+
+          <!-- Scrollable list -->
+          <div class="max-h-64 overflow-y-auto border rounded">
+            <ul id="device-list-ul" class="divide-y">
+              {% for d in devices %}
+                <li class="px-3 py-2 cursor-pointer hover:bg-gray-100"
+                  data-id="{{ d.id }}"
+                  data-name="{{ d.name }}"
+                  onclick="selectDevice(this, '{{ d.id }}', '{{ d.name }}')">
+                  {{ d.name }} — {{ d.ip }} — {{ d.os }} — {{ d.location }}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Hidden selected device -->
+      <input type="hidden" id="selected-device" value="">
+      <input type="hidden" id="selected-device-name" value="">
+
+    </div>
+
+
+    <!-- RIGHT: Command Box (wide) -->
+    <div class="md:w-2/3 mt-6 md:mt-0 border rounded p-4 bg-gray-50">
+      <!-- <h2 id="run-command-title" class="font-semibold mb-2">Run Command</h2> -->
+
+      <input id="command-input" class="border px-3 py-2 rounded w-full mb-3"
+        placeholder="Enter command..."
+      />
+
+      <button class="bg-blue-600 text-white px-4 py-2 rounded"
+        onclick="runCommand()">
+        Run Command
+      </button>
+
+      <button class="bg-green-600 text-white px-4 py-2 rounded ml-2"
+        onclick="startInteractive()">
+        Start Interactive
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Run Command Output Box -->
+<div id="run-output-container"
+     class="mt-6 border rounded bg-white p-4 h-200 overflow-auto hidden">
+  <h3 id="run-output-title" class="font-semibold mb-2"></h3>
+  <pre id="run-output" class="whitespace-pre-wrap text-sm"></pre>
+</div>
+
+
+  <!-- Terminal stays full width -->
+<div id="terminal-container"
+     class="mt-6 border rounded bg-black h-64 overflow-hidden hidden">
+</div>
+
+
+</div>
+
+
+<!-- WebSocket + Xterm.js + HTTP Logic -->
+<script>
+  let ws = null;
+  let term = null;
+  let fitAddon = null;
+  let selectedDeviceId = "";
+  let selectedDeviceName = "";
+
+  // ---------------------------
+  // Initialize Xterm.js Terminal
+  // ---------------------------
+  function initTerminal() {
+    if (term) return;
+
+    fitAddon = new FitAddon.FitAddon();
+    term = new Terminal({
+      cursorBlink: true,
+      convertEol: true,
+      fontSize: 14,
+      theme: {
+        background: "#000000",
+        foreground: "#00ff00"
+      }
+    });
+
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById("terminal-container"));
+    fitAddon.fit();
+
+    // Send keystrokes to WebSocket
+    term.onData(data => {
+      if (ws) ws.send(data);
+    });
+  }
+
+  function appendOutput(text) {
+    if (!term) return;
+    term.write(text.replace(/\n/g, "\r\n"));
+  }
+
+  function setSelectedDevice(deviceId, deviceName) {
+    selectedDeviceId = deviceId;
+    selectedDeviceName = deviceName;
+    document.getElementById("selected-device").value = deviceId;
+    document.getElementById("selected-device-name").value = deviceName;
+
+    const title = document.getElementById("device-selector-title");
+    title.textContent = `Run command on ${deviceName}`;
+
+    const arrow = document.getElementById("device-dropdown-arrow");
+    arrow.textContent = "▲";
+    document.getElementById("run-output").textContent = "";
+    document.getElementById("run-output-title").textContent = "";
+
+
+  }
+
+  function getSelectedDevice() {
+    return selectedDeviceId;
+  }
+
+  // ---------------------------
+  // Run Command (HTTP)
+  // ---------------------------
+  async function runCommand() {
+    // Hide terminal, show run-output box
+    document.getElementById("terminal-container").classList.add("hidden");
+    document.getElementById("run-output-container").classList.remove("hidden");
+
+    const deviceId = getSelectedDevice();
+    const deviceName = selectedDeviceName; 
+    const cmd = document.getElementById("command-input").value;
+
+    if (!deviceId) {
+      alert("Select a device first");
+      return;
+    }
+
+     document.getElementById("run-output-title").textContent = `${deviceName}# ${cmd}`;
+
+    document.getElementById("run-output").textContent = "";
+
+    const resp = await fetch(`/connector/${deviceId}/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: cmd })
+    });
+
+    const data = await resp.json();
+    const outBox = document.getElementById("run-output");
+    outBox.textContent += `\n${data.output}\n`;
+
+  }
+
+  // ---------------------------
+  // Start Interactive (WebSocket)
+  // ---------------------------
+  function startInteractive() {
+    const deviceId = getSelectedDevice();
+    if (!deviceId) {
+      alert("Select a device first");
+      return;
+    }
+    // Hide run-output, show terminal
+    document.getElementById("run-output-container").classList.add("hidden");
+    document.getElementById("terminal-container").classList.remove("hidden");
+    initTerminal();
+
+    if (ws) ws.close();
+
+    ws = new WebSocket(`wss://${window.location.host}/connector/ws/${deviceId}`);
+
+    ws.onopen = () => {
+      appendOutput(`\r\n[Interactive session started for ${deviceId}]\r\n`);
+      sendResize();
+    };
+
+    ws.onmessage = (event) => {
+      appendOutput(event.data);
+    };
+
+    ws.onclose = () => {
+      appendOutput(`\r\n[Interactive session closed]\r\n`);
+      ws = null;
+    };
+  }
+
+  // ---------------------------
+  // Terminal Resize → Backend
+  // ---------------------------
+  function sendResize() {
+    if (!ws || !term) return;
+    const cols = term.cols;
+    const rows = term.rows;
+    ws.send(`__resize__:${cols}:${rows}`);
+  }
+
+  window.addEventListener("resize", () => {
+    if (fitAddon) {
+      fitAddon.fit();
+      sendResize();
+    }
+  });
+
+  // ---------------------------
+  // Enter key sends command in interactive mode
+  // ---------------------------
+  document.getElementById("command-input").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") {
+      if (ws) {
+        ws.send(this.value + "\n");
+        this.value = "";
+      }
+    }
+  });
+</script>
+
+
+<script>
+function toggleDeviceDropdown() {
+  const dd = document.getElementById("device-dropdown");
+  const arrow = document.getElementById("device-dropdown-arrow");
+  const title = document.getElementById("device-selector-title");
+
+  const selectedName = document.getElementById("selected-device-name").value;
+
+  dd.classList.toggle("hidden");
+
+  if (dd.classList.contains("hidden")) {
+    // Collapsed
+    arrow.textContent = "▼";
+
+    if (selectedName && selectedName.trim() !== "") {
+      // Device selected → KEEP the title
+      return;
+    }
+
+    // No device selected → show default
+    title.textContent = "Select a device to run command on";
+
+  } else {
+    // Expanded
+    arrow.textContent = "▲";
+
+    if (!selectedName || selectedName.trim() === "") {
+      title.textContent = "Select a device to run command on";
+    }
+  }
+}
+
+function filterDeviceList() {
+  const keyword = document.getElementById("device-search").value.toLowerCase();
+  const items = document.querySelectorAll("#device-list-ul li");
+
+  items.forEach(li => {
+    const text = li.textContent.toLowerCase();
+    li.style.display = text.includes(keyword) ? "" : "none";
+  });
+}
+
+function selectDevice(element, deviceId, deviceName) {
+  setSelectedDevice(deviceId, deviceName);
+
+  const items = document.querySelectorAll("#device-list-ul li");
+  items.forEach(li => li.classList.remove("bg-blue-100"));
+  element.classList.add("bg-blue-100");
+}
+
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const list = document.getElementById("device-list-ul");
+  if (!list) return;
+
+  list.addEventListener("click", (event) => {
+    const li = event.target.closest("li");
+    if (!li || !list.contains(li)) return;
+
+    const deviceId = li.dataset.id;
+    const deviceName = li.dataset.name;
+    if (!deviceId) return;
+
+    setSelectedDevice(deviceId, deviceName);
+
+    list.querySelectorAll("li").forEach(item => item.classList.remove("bg-blue-100"));
+    li.classList.add("bg-blue-100");
+  });
+});
+</script>
+
+
+{% endblock %}

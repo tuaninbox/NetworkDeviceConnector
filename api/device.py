@@ -1,0 +1,115 @@
+from fastapi import APIRouter, Body, HTTPException, Request, WebSocket, WebSocketDisconnect
+
+router = APIRouter(prefix="/connector", tags=["Device Connector"])
+
+
+def get_device(request: Request, device_id: str) -> dict:
+    devices = getattr(request.app.state, "devices", []) or []
+    for device in devices:
+        if device.get("id") == device_id:
+            return device
+    raise HTTPException(status_code=404, detail="Device not found")
+
+
+# ---------------------------
+# Run a single command
+# ---------------------------
+@router.post("/{device_id}/run")
+async def run_command(request: Request, device_id: str, command: str = Body(..., embed=True)):
+    device = get_device(request, device_id)
+    ssh_manager = request.app.state.ssh_manager
+    output = await ssh_manager.run_single_command(device, command)
+    return {"output": output}
+
+
+# ---------------------------
+# Start interactive session
+# ---------------------------
+@router.post("/{device_id}/interactive/start")
+async def start_interactive(request: Request, device_id: str):
+    device = get_device(request, device_id)
+
+    if ssh_manager.get_session(device_id):
+        return {"status": "already_active"}
+
+    await ssh_manager.start_session(device)
+    return {"status": "started", "device": device_id}
+
+
+# ---------------------------
+# Send command to interactive session
+# ---------------------------
+@router.post("/{device_id}/interactive/send")
+async def interactive_send(device_id: str, command: str = Body(..., embed=True)):
+    session = ssh_manager.get_session(device_id)
+    if not session:
+        raise HTTPException(status_code=400, detail="No active session")
+
+    output = await session.send(command)
+    return {"output": output}
+
+
+# ---------------------------
+# Close interactive session
+# ---------------------------
+@router.post("/{device_id}/interactive/close")
+async def close_interactive(device_id: str):
+    await ssh_manager.close_session(device_id)
+    return {"status": "closed"}
+
+
+# ============================================================
+# 🚀 NEW: WebSocket Interactive Terminal
+# ============================================================
+@router.websocket("/ws/{device_id}")
+async def websocket_terminal(websocket: WebSocket, device_id: str, request: Request):
+    await websocket.accept()
+
+    device = get_device(request, device_id)
+
+    # Start or reuse SSH session
+    session = ssh_manager.get_session(device_id)
+    if not session:
+        session = await ssh_manager.start_session(device)
+
+    try:
+        await websocket.send_text(
+            f"Connected to {device.get('name')} ({device.get('ip')})\n"
+        )
+
+        while True:
+            data = await websocket.receive_text()
+
+            # Handle terminal resize messages
+            if data.startswith("__resize__"):
+                _, cols, rows = data.split(":")
+                cols = int(cols)
+                rows = int(rows)
+                await session.channel.request_pty(
+                    term_type="xterm",
+                    width=cols,
+                    height=rows
+                )
+                continue
+
+            # Allow user to exit
+            if data.strip().lower() in ("exit", ":q", "quit"):
+                await websocket.send_text("\nSession closed.\n")
+                break
+
+            # Send to SSH and stream output back
+            output = await session.send(data)
+
+            # Cisco paging detection
+            if "--More--" in output:
+                await session.channel.write(" ")  # send space
+                more_output = await session.channel.read()
+                output += more_output
+
+            await websocket.send_text(output)
+
+    except WebSocketDisconnect:
+        pass
+
+    finally:
+        await ssh_manager.close_session(device_id)

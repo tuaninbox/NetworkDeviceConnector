@@ -1,0 +1,12 @@
+devices:
+  source: "file"   # nagios or "file"
+
+  file_path: "devices.csv"
+
+  nagios:
+    hostgroups:
+      - ConfigBackup_ios
+      - ConfigBackup_nxos
+
+credentials:
+  file: credentials

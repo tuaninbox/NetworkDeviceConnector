@@ -1,0 +1,36 @@
+{% for u in accounts %}
+<tr id="row-{{ u.id }}" class="border-b hover:bg-gray-50">
+  <td class="px-4 py-2">{{ u.username }}</td>
+  <td class="px-4 py-2">
+    {% if u.role == "requester_approver" %}
+      Requester & Approver
+    {% elif u.role == "requester" %}
+      Requester
+    {% elif u.role == "approver" %}
+      Approver
+    {% elif u.role == "admin" %}
+      Admin
+    {% else %}
+      {{ u.role }}
+    {% endif %}
+  </td>
+  <td class="px-4 py-2 space-x-2">
+
+    <!-- Edit (full page, no HTMX) -->
+    <a href="/ui/accounts/{{ u.id }}/edit"
+       class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">
+      Edit
+    </a>
+
+    <!-- Delete (inline confirmation via HTMX) -->
+    <button
+      class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+      hx-get="/ui/accounts/{{ u.id }}/delete-inline"
+      hx-target="#row-{{ u.id }}"
+      hx-swap="outerHTML">
+      Delete
+    </button>
+
+  </td>
+</tr>
+{% endfor %}
