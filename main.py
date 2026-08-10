@@ -7,17 +7,16 @@ import httpx
 from core.db import Base, engine, AsyncSessionLocal
 from core.security import hash_password
 # from core.middleware import AuditMiddleware
-from models.user import User
+from models.account import Account
 
 # API Routers
-from api import auth, accounts, admin, logs as api_logs
+from api import auth, accounts, logs as api_logs
 
 # UI Routers
 from ui.routes import (
     auth as ui_auth,
     accounts as ui_accounts,
     devices as ui_devices,
-    requests as ui_requests,
     logs as ui_logs,
 )
 
@@ -44,19 +43,21 @@ async def seed_admin_user():
     This runs automatically and is idempotent.
     """
     async with AsyncSessionLocal() as db:
-        stmt = select(User).where(User.username == "admin")
+        stmt = select(Account).where(Account.username == "admin")
         result = await db.execute(stmt)
         existing = result.scalar_one_or_none()
 
         if existing:
             return  # Admin already exists
 
-        admin_user = User(
+        admin_user = Account(
             username="admin",
             email="admin@example.com",
             role="admin",
             password_hash=hash_password("admin123"),
-            is_active=True,
+            source="local",
+            first_name="Super",
+            last_name="Admin",
         )
 
         db.add(admin_user)
@@ -115,14 +116,12 @@ async def shutdown():
 app.include_router(auth.router)
 app.include_router(inventory.router)
 app.include_router(accounts.router)
-app.include_router(admin.router)
 app.include_router(api_logs.router)
 app.include_router(device.router)
 
 # UI Routers
 app.include_router(ui_auth.router)
 app.include_router(ui_accounts.router)
-app.include_router(ui_requests.router)
 app.include_router(ui_devices.router)
 app.include_router(ui_logs.router)
 

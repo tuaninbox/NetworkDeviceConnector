@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 import httpx
 
 from deps.auth import get_current_user_optional
-from models.user import User
+from models.account import Account
 from core.audit_logger import log_action
 from core.settings import settings
 
@@ -18,7 +18,7 @@ api_base_url = settings.backend_url  # Use the backend URL from settings
 @router.get("/logs", response_class=HTMLResponse)
 async def ui_logs_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     user: str | None = None,
     category: str | None = None,
     action: str | None = None,

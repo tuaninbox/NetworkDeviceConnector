@@ -9,7 +9,7 @@ from sqlalchemy import select
 from core.db import get_db
 from deps.auth import get_current_user_optional
 from core.security import verify_password, create_access_token, hash_password
-from models.user import User
+from models.account import Account
 from core.device_loader import load_devices
 from core.audit_logger import log_action
 
@@ -37,7 +37,7 @@ async def login_submit(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(User).where(User.username == username)
+    stmt = select(Account).where(Account.username == username)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -77,7 +77,7 @@ async def login_submit(
 @router.get("/logout")
 async def logout(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional)
+    current_user: Account | None = Depends(get_current_user_optional)
 ):
     # Log BEFORE clearing the session
     if current_user:

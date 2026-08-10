@@ -9,7 +9,6 @@ from sqlalchemy import select
 from core.db import get_db
 from deps.auth import get_current_user_optional
 from core.security import verify_password, hash_password
-from models.user import User
 from models.account import Account
 from core.audit_logger import log_action
 
@@ -18,14 +17,187 @@ templates = Jinja2Templates(directory="ui/templates")
 templates.env.cache.clear()
 
 async def count_admins(db: AsyncSession) -> int:
-    stmt = select(User).where(User.role == "admin")
+    stmt = select(Account).where(Account.role == "admin")
     result = await db.execute(stmt)
     return len(result.scalars().all())
+
+
+# =============================== Separated =========================
+
+@router.get("/accounts/{user_id}/edit")
+async def admin_edit_page(
+    user_id: int,
+    request: Request,
+    current_user: Account | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user is None or current_user.role != "admin":
+        log_action(
+            current_user,
+            "accounts_edit_view",
+            "Redirected to login page due to unauthenticated access attempt",
+            request,
+            category="ui/accounts"
+        )
+        return RedirectResponse("/ui/login")
+
+    stmt = select(Account).where(Account.id == user_id)
+    user = (await db.execute(stmt)).scalar_one_or_none()
+
+    if not user:
+        return RedirectResponse("/ui/accounts")
+
+    log_action(
+        current_user,
+        "accounts_edit_view",
+        "Viewed account edit page",
+        request,
+        category="ui/accounts"
+    )
+
+    return templates.TemplateResponse(
+        "account_edit.html",
+        {
+            "request": request,
+            "user": user,       
+            "current_user": current_user,
+            "error": None,
+        },
+    )
+
+
+# Edit account submission (admin)
+@router.post("/accounts/{user_id}/edit", response_class=HTMLResponse)
+async def accounts_edit_submit_page(
+    user_id: int,
+    request: Request,
+    current_user: Account | None = Depends(get_current_user_optional),
+):
+    if current_user is None:
+        return RedirectResponse("/ui/login")
+
+    # Extract form fields from frontend POST
+    form = await request.form()
+
+    payload = {
+        "username": form.get("username"),
+        "first_name": form.get("first_name"),
+        "last_name": form.get("last_name"),
+        "email": form.get("email"),
+        "role": form.get("role"),
+        "profiles": [p.strip() for p in form.get("profiles").split(",")] if form.get("profiles") else None,
+        "new_password": form.get("new_password"),
+        "confirm_password": form.get("confirm_password"),
+    }
+
+    # Backend API endpoint
+    api_url = f"{request.url.scheme}://{request.url.hostname}:{request.url.port}/api/accounts/{user_id}"
+
+    # Forward cookies (auth)
+    cookies = request.cookies
+
+    # Forward POST to backend API
+    api_resp = await request.app.state.http_client.post(
+        api_url,
+        json=payload,
+        cookies=cookies
+    )
+
+    data = api_resp.json()
+
+    # If backend API returns error → re-render page with error
+    if api_resp.status_code != 200:
+        # Fetch latest user data again for re-render
+        api_get_url = f"{request.url.scheme}://{request.url.hostname}:{request.url.port}/api/accounts/{user_id}"
+        api_user_resp = await request.app.state.http_client.get(api_get_url, cookies=cookies)
+        user_data = api_user_resp.json()
+
+        return templates.TemplateResponse(
+            "account_edit.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "user": user_data,
+                "error": data.get("error") or "Unknown error",
+            },
+        )
+
+    # Success → redirect to accounts page
+    return RedirectResponse("/ui/accounts?success=1", status_code=302)
+
+
+# Create account submission (admin)
+@router.post("/accounts/create", response_class=HTMLResponse)
+async def accounts_create_submit_page(
+    request: Request,
+    current_user: Account | None = Depends(get_current_user_optional),
+):
+    if current_user is None:
+        return RedirectResponse("/ui/login")
+
+    # Extract form fields
+    form = await request.form()
+
+    # Convert profiles string → list
+    profiles_raw = form.get("profiles")
+    profiles_list = [p.strip() for p in profiles_raw.split(",") if p.strip()] if profiles_raw else []
+
+    # Build payload for backend API
+    payload = {
+        "username": form.get("username"),
+        "password": form.get("password"),
+        "confirm_password": form.get("confirm_password"),
+        "role": form.get("role"),
+        "first_name": form.get("first_name"),
+        "last_name": form.get("last_name"),
+        "email": form.get("email"),
+        "source": form.get("source"),
+        "profiles": profiles_list,
+    }
+
+    # Backend API endpoint
+    api_url = f"{request.url.scheme}://{request.url.hostname}:{request.url.port}/api/accounts"
+
+    # Forward cookies for authentication
+    cookies = request.cookies
+
+    # Forward POST to backend API
+    api_resp = await request.app.state.http_client.post(
+        api_url,
+        json=payload,
+        cookies=cookies
+    )
+
+    data = api_resp.json()
+
+    # Handle backend errors
+    if api_resp.status_code != 200:
+        return templates.TemplateResponse(
+            "account_create.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "error": data.get("error") or "Unknown error",
+                "form_data": payload,
+            },
+        )
+
+    # Success → redirect to accounts list
+    return RedirectResponse("/ui/accounts?success=1", status_code=303)
+
+
+
+
+
+# ========================= Original ========
+
+
+
 
 @router.get("/accounts", response_class=HTMLResponse)
 async def accounts_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None:
@@ -49,7 +221,7 @@ async def accounts_page(
         )
         return RedirectResponse("/ui/devices")
 
-    stmt = select(User)
+    stmt = select(Account)
     result = await db.execute(stmt)
     accounts = result.scalars().all()
 
@@ -69,7 +241,7 @@ async def accounts_page(
 @router.get("/accounts/create")
 async def account_create_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None or current_user.role != "admin":
         log_action(
@@ -107,7 +279,7 @@ async def accounts_create(
     password: str = Form(...),
     confirm_password: str = Form(...),
     role: str = Form(...),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None or current_user.role != "admin":
@@ -142,7 +314,7 @@ async def accounts_create(
 
     hashed = hash_password(password)
 
-    new_user = User(
+    new_user = Account(
         username=username,
         email=email,
         password_hash=hashed,
@@ -168,7 +340,7 @@ async def accounts_create(
 @router.get("/account/self/edit")
 async def account_self_edit_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None:
         log_action(
@@ -208,7 +380,7 @@ async def account_self_edit(
     current_password: str = Form(None),
     new_password: str = Form(None),
     confirm_password: str = Form(None),
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None:
@@ -270,130 +442,13 @@ async def account_self_edit(
     return RedirectResponse(f"/ui/account/{current_user.id}?success=1", status_code=302)
 
 
-@router.get("/accounts/{user_id}/edit")
-async def admin_edit_page(
-    user_id: int,
-    request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user is None or current_user.role != "admin":
-        log_action(
-            current_user,
-            "accounts_edit_view",
-            "Redirected to login page due to unauthenticated access attempt",
-            request,
-            category="accounts"
-        )
-        return RedirectResponse("/ui/login")
-
-    stmt = select(User).where(User.id == user_id)
-    user = (await db.execute(stmt)).scalar_one_or_none()
-
-    if not user:
-        return RedirectResponse("/ui/accounts")
-
-    log_action(
-        current_user,
-        "accounts_edit_view",
-        "Viewed account edit page",
-        request,
-        category="accounts"
-    )
-
-    return templates.TemplateResponse(
-        "account_edit.html",
-        {
-            "request": request,
-            "user": user,       
-            "current_user": current_user,
-            "error": None,
-        },
-    )
-
-
-@router.post("/accounts/{user_id}/edit")
-async def admin_edit_submit(
-    user_id: int,
-    request: Request,
-    username: str = Form(None),
-    email: str = Form(None),
-    role: str = Form(None),
-    new_password: str = Form(None),
-    confirm_password: str = Form(None),
-    current_user: User | None = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user is None or current_user.role != "admin":
-        log_action(
-            current_user,
-            "accounts_edit_submit",
-            "Redirected to login page due to unauthenticated access attempt",
-            request,
-            category="accounts"
-        )
-        return RedirectResponse("/ui/login")
-
-    stmt = select(User).where(User.id == user_id)
-    user = (await db.execute(stmt)).scalar_one_or_none()
-
-    if not user:
-        return RedirectResponse("/ui/accounts")
-
-    # Prevent demoting last admin
-    stmt = select(User).where(User.role == "admin")
-    admins = (await db.execute(stmt)).scalars().all()
-    if user.role == "admin" and role != "admin" and len(admins) == 1:
-        return templates.TemplateResponse(
-            "account_edit.html",
-            {"request": request, "user": user, "error": "Cannot change role of the last admin."},
-        )
-
-    # Username uniqueness
-    if username and username != user.username:
-        stmt = select(User).where(User.username == username)
-        existing = (await db.execute(stmt)).scalar_one_or_none()
-        if existing:
-            return templates.TemplateResponse(
-                "account_edit.html",
-                {"request": request, "user": user, "error": "Username already exists."},
-            )
-        user.username = username
-
-    # Email update
-    if email:
-        user.email = email
-
-    # Role update
-    if role:
-        user.role = role
-
-    # Password update
-    if new_password:
-        if new_password != confirm_password:
-            return templates.TemplateResponse(
-                "account_edit.html",
-                {"request": request, "user": user, "error": "New passwords do not match."},
-            )
-        user.password_hash = hash_password(new_password)
-
-    await db.commit()
-
-    log_action(
-        current_user,
-        "accounts_edit_submit",
-        "Submitted account edit form",
-        request,
-        category="accounts"
-    )
-    return RedirectResponse("/ui/accounts?success=1", status_code=302)
 
 
 @router.post("/accounts/{user_id}/delete")
 async def accounts_delete(
     user_id: int,
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None or current_user.role != "admin":
@@ -409,14 +464,14 @@ async def accounts_delete(
     # Count admins BEFORE deleting
     admin_count = await count_admins(db)
 
-    stmt = select(User).where(User.id == user_id)
+    stmt = select(Account).where(Account.id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
     # Prevent deleting the last admin
     if user and user.role == "admin" and admin_count <= 1:
         # Return table with error message inline
-        stmt = select(User)
+        stmt = select(Account)
         result = await db.execute(stmt)
         accounts = result.scalars().all()
 
@@ -461,7 +516,7 @@ async def accounts_delete(
 @router.get("/accounts/create")
 async def account_create_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None or current_user.role != "admin":
         log_action(
@@ -491,49 +546,7 @@ async def account_create_page(
     )
 
 
-@router.post("/create")
-async def accounts_create_submit(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    confirm_password: str = Form(...),
-    role: str = Form(...),
-    first_name: str = Form(None),
-    last_name: str = Form(None),
-    email: str = Form(None),
-    source: str = Form(...),
-    profiles: str = Form(""),
-    current_user: User = Depends(get_current_user_optional),
-):
-    roles = request.app.state.roles
 
-    if not has_permission(current_user.role, "create_accounts", roles):
-        return RedirectResponse("/ui/login")
-
-    if password != confirm_password:
-        return RedirectResponse("/ui/accounts/create?error=password_mismatch")
-
-    api_url = f"{request.url.scheme}://{request.url.hostname}:{request.url.port}/api/accounts/"
-
-    payload = {
-        "username": username,
-        "password": password,
-        "confirm_password": confirm_password,
-        "role": role,
-        "first_name": first_name,
-        "last_name": last_name,
-        "email": email,
-        "source": source,
-        "profiles": [p.strip() for p in profiles.split(",") if p.strip()],
-    }
-
-    resp = await request.app.state.http_client.post(
-        api_url,
-        json=payload,
-        cookies=request.cookies
-    )
-
-    return RedirectResponse("/ui/accounts", status_code=303)
 
 
 
@@ -541,7 +554,7 @@ async def accounts_create_submit(
 async def account_delete_inline(
     user_id: int,
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None or current_user.role != "admin":
@@ -554,7 +567,7 @@ async def account_delete_inline(
         )
         return RedirectResponse("/ui/login")
 
-    stmt = select(User).where(User.id == user_id)
+    stmt = select(Account).where(Account.id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
@@ -603,7 +616,7 @@ async def account_delete_inline(
 async def account_self(
     user_id: int,
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None:
         log_action(
@@ -649,7 +662,7 @@ async def account_self(
 async def account_edit_page(
     request: Request,
     account_id: int,
-    current_user: User = Depends(get_current_user_optional),
+    current_user: Account = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     roles = request.app.state.roles
@@ -687,7 +700,7 @@ async def account_edit_submit(
     profiles: str = Form(""),
     new_password: str = Form(""),
     confirm_password: str = Form(""),
-    current_user: User = Depends(get_current_user_optional),
+    current_user: Account = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     roles = request.app.state.roles

@@ -1,26 +1,37 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
-class AccountRead(BaseModel):
-    id: int
+class AccountBase(BaseModel):
     username: str
-    role: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    email: Optional[str]
-    source: str
-    profiles: Optional[List[str]]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    role: str = "user"
+    source: str = "local"
+    profiles: Optional[List[str]] = None
+
+class AccountRead(AccountBase):
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    role: str = "user"
+    source: str = "local"
+    profiles: Optional[List[str]] = None
 
     class Config:
         from_attributes = True
 
-class AccountCreate(BaseModel):
-    username: str
+class AccountCreate(AccountBase):
     password: str
     confirm_password: str
-    role: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    email: Optional[str]
-    source: str
-    profiles: Optional[List[str]] = []
+
+    class Config:
+        from_attributes = True
+
+class AccountUpdate(AccountBase):
+    new_password: Optional[str] = None
+    confirm_password: Optional[str] = None
+
+    class Config:
+        from_attributes = True

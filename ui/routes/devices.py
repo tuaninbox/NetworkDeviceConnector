@@ -9,7 +9,7 @@ from sqlalchemy import select
 from core.db import get_db
 from deps.auth import get_current_user_optional
 from core.security import verify_password, create_access_token, hash_password
-from models.user import User
+from models.account import Account
 from core.device_loader import load_devices
 from core.audit_logger import log_action
 
@@ -20,7 +20,7 @@ templates.env.cache.clear()
 @router.get("/devices", response_class=HTMLResponse)
 async def devices_page(
     request: Request,
-    current_user: User | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None:
         return RedirectResponse("/ui/login")

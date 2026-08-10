@@ -7,7 +7,7 @@ from deps.auth import get_current_user
 from core.logging import log_event
 from core.nagios import get_hosts_from_hostgroup
 from core.device_loader import load_devices
-from models.user import User
+from models.account import Account
 # from models.device import Device
 # from schemas.device import DeviceRead, DeviceCreate, DeviceImportItem
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/devices", tags=["devices"])
 @router.get("/")
 async def list_devices(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Account = Depends(get_current_user),
 ):
     """
     Devices are loaded dynamically from Nagios or static file.
@@ -38,7 +38,7 @@ async def list_devices(
 @router.post("/nagios/sync")
 async def sync_devices_from_nagios(
     hostgroup_name: str,
-    current_user: User = Depends(get_current_user),
+    current_user: Account = Depends(get_current_user),
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admin can sync devices")
@@ -63,7 +63,7 @@ async def sync_devices_from_nagios(
 @router.post("/import-local")
 async def import_local_devices(
     items: list[dict],
-    current_user: User = Depends(get_current_user),
+    current_user: Account = Depends(get_current_user),
 ):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Only admin can import devices")

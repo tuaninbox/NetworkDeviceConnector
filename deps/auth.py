@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from core.security import decode_token
 from core.db import get_db
-from models.user import User
+from models.account import Account
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -22,11 +22,11 @@ async def get_current_user(
             if not user_id:
                 raise HTTPException(status_code=401, detail="Invalid token payload")
 
-            stmt = select(User).where(User.id == user_id)
+            stmt = select(Account).where(Account.id == user_id)
             result = await db.execute(stmt)
             user = result.scalar_one_or_none()
 
-            if user and user.is_active:
+            if user:
                 return user
 
         except Exception as e:
@@ -41,7 +41,7 @@ async def get_current_user(
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        stmt = select(User).where(User.id == user_id)
+        stmt = select(Account).where(Account.id == user_id)
         result = await db.execute(stmt)
         user = result.scalar_one_or_none()
 
@@ -57,7 +57,7 @@ async def get_current_user(
 async def get_current_user_optional(
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> User | None:
+) -> Account | None:
     try:
         return await get_current_user(request, db)
     except HTTPException:

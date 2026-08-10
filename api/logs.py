@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from deps.auth import get_current_user
-from models.user import User
+from models.account import Account
 from core.audit_logger import LOG_PATH
 import json
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/logs", tags=["logs"])
 
 @router.get("/")
 async def api_get_logs(
-    current_user: User = Depends(get_current_user),
+    current_user: Account = Depends(get_current_user),
     user: str | None = None,
     category: str | None = None,
     action: str | None = None,

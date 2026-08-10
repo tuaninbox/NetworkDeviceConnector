@@ -118,6 +118,27 @@
 
 </div>
 
+<!-- Modern confirmation modal -->
+<div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-40 hidden flex items-center justify-center">
+  <div class="bg-white rounded shadow-lg p-6 w-80">
+    <h2 class="text-lg font-semibold mb-4" id="confirm-modal-title">Confirm</h2>
+    <p id="confirm-modal-message" class="mb-6"></p>
+
+    <div class="flex justify-end space-x-3">
+      <button id="confirm-cancel"
+              class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+        Cancel
+      </button>
+
+      <button id="confirm-ok"
+              class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+        Yes, close
+      </button>
+    </div>
+  </div>
+</div>
+
+
 
 <!-- WebSocket + Xterm.js + HTTP Logic -->
 <script>
@@ -151,6 +172,32 @@
     }
   });
 
+  //Enter key trigger runCommand() when not in interactive mode
+  document.getElementById("command-input").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();   // stops form submission or unwanted behaviour
+      runCommand();         // runs your existing function
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const list = document.getElementById("device-list-ul");
+    if (!list) return;
+
+    list.addEventListener("click", (event) => {
+      const li = event.target.closest("li");
+      if (!li || !list.contains(li)) return;
+
+      const deviceId = li.dataset.id;
+      const deviceName = li.dataset.name;
+      if (!deviceId) return;
+
+      setSelectedDevice(deviceId, deviceName);
+
+      list.querySelectorAll("li").forEach(item => item.classList.remove("bg-blue-100"));
+      li.classList.add("bg-blue-100");
+    });
+  });
 
   // ---------------------------
   // Initialize Xterm.js Terminal
@@ -317,45 +364,219 @@
     const tabs = document.getElementById("output-tabs");
     tabs.classList.remove("hidden");
 
-    const tab = document.createElement("button");
+    const tab = document.createElement("div");
     tab.id = `tab-${deviceId}`;
-    tab.textContent = deviceName;
-    tab.className = "px-3 py-1 rounded bg-gray-200 hover:bg-gray-300";
-    tab.onclick = () => switchToDeviceTab(deviceId);
+    tab.className = "flex items-center px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 mr-1";
 
+    // Tab label
+    const label = document.createElement("button");
+    label.textContent = deviceName;
+    label.className = "tab-label mr-2";
+    label.onclick = () => switchToDeviceTab(deviceId);
+
+    // Close button
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.className = "text-red-600 font-bold hover:text-red-800";
+    closeBtn.onclick = (e) => {
+      e.stopPropagation(); // prevent switching tab when clicking close
+      closeDeviceTab(deviceId);
+    };
+
+    tab.appendChild(label);
+    tab.appendChild(closeBtn);
     tabs.appendChild(tab);
   }
 
-function switchToDeviceTab(deviceId) {
-  activeDeviceTab = deviceId;
+  // function addDeviceTab(deviceId, deviceName) {
+  //   const tabs = document.getElementById("output-tabs");
+  //   tabs.classList.remove("hidden");
 
-  // Update selected device name
-  selectedDeviceName = document.getElementById(`tab-${deviceId}`).textContent;
+  //   const tab = document.createElement("button");
+  //   tab.id = `tab-${deviceId}`;
+  //   tab.textContent = deviceName;
+  //   tab.className = "px-3 py-1 rounded bg-gray-200 hover:bg-gray-300";
+  //   tab.onclick = () => switchToDeviceTab(deviceId);
 
-  // Highlight active tab
-  document.querySelectorAll("#output-tabs button").forEach(btn => {
-    btn.classList.remove("bg-blue-500", "text-white");
-    btn.classList.add("bg-gray-200");
-  });
+  //   tabs.appendChild(tab);
+  // }
 
-  const activeBtn = document.getElementById(`tab-${deviceId}`);
-  activeBtn.classList.remove("bg-gray-200");
-  activeBtn.classList.add("bg-blue-500", "text-white");
-
-  // Show output box
-  document.getElementById("run-output-container").classList.remove("hidden");
-  document.getElementById("terminal-container").classList.add("hidden");
-
-  // Load output for this device
-  document.getElementById("run-output").textContent = deviceOutputs[deviceId];
-  // document.getElementById("run-output-title").textContent = selectedDeviceName;
-}
+  // function closeDeviceTab(deviceId) {
+  //   const tab = document.getElementById(`tab-${deviceId}`);
+  //   const deviceName = tab.querySelector(".tab-label").textContent;
 
 
-</script>
+  //   if (!confirm(`Close tab for ${deviceName}?`)) {
+  //     return;
+  //   }
+
+  //   // Remove tab element
+  //   const tab = document.getElementById(`tab-${deviceId}`);
+  //   if (tab) tab.remove();
+
+  //   // Remove stored output
+  //   delete deviceOutputs[deviceId];
+
+  //   // If this tab was active, switch to another tab
+  //   if (activeDeviceTab === deviceId) {
+  //     const remainingTabs = document.querySelectorAll("#output-tabs > div");
+
+  //     if (remainingTabs.length > 0) {
+  //       const firstTab = remainingTabs[0];
+  //       const newId = firstTab.id.replace("tab-", "");
+  //       switchToDeviceTab(newId);
+  //     } else {
+  //       // No tabs left → clear UI
+  //       activeDeviceTab = null;
+  //       selectedDeviceId = "";
+  //       selectedDeviceName = "";
+  //       document.getElementById("selected-device").value = "";
+  //       document.getElementById("selected-device-name").value = "";
+
+  //       document.getElementById("run-output").textContent = "";
+  //       document.getElementById("output-tabs").classList.add("hidden");
+
+  //       const title = document.getElementById("device-selector-title");
+  //       title.textContent = "Select a device to run command on";
+  //     }
+  //   }
+  // }
+
+  function closeDeviceTab(deviceId) {
+    const tab = document.getElementById(`tab-${deviceId}`);
+    const deviceName = tab.querySelector(".tab-label").textContent;
+
+    showConfirm(`Close tab for ${deviceName}?`, () => {
+
+      // Remove tab element
+      tab.remove();
+
+      // Remove stored output
+      delete deviceOutputs[deviceId];
+
+      // If this tab was active, switch to another tab
+      if (activeDeviceTab === deviceId) {
+        const remainingTabs = document.querySelectorAll("#output-tabs > div");
+
+        if (remainingTabs.length > 0) {
+          const firstTab = remainingTabs[0];
+          const newId = firstTab.id.replace("tab-", "");
+          switchToDeviceTab(newId);
+        } else {
+          // No tabs left → clear UI
+          activeDeviceTab = null;
+          selectedDeviceId = "";
+          selectedDeviceName = "";
+          document.getElementById("selected-device").value = "";
+          document.getElementById("selected-device-name").value = "";
+
+          document.getElementById("run-output").textContent = "";
+          document.getElementById("output-tabs").classList.add("hidden");
+
+          const title = document.getElementById("device-selector-title");
+          title.textContent = "Select a device to run command on";
+        }
+      }
+    });
+  }
+
+  function switchToDeviceTab(deviceId) {
+    activeDeviceTab = deviceId;
+
+    const tab = document.getElementById(`tab-${deviceId}`);
+    const deviceName = tab.querySelector(".tab-label").textContent;
+    selectedDeviceName = deviceName;
+
+    // Sync hidden fields
+    document.getElementById("selected-device").value = deviceId;
+    document.getElementById("selected-device-name").value = deviceName;
+
+    // Update dropdown title
+    const title = document.getElementById("device-selector-title");
+    title.textContent = `Run command on ${deviceName}`;
+
+    const arrow = document.getElementById("device-dropdown-arrow");
+    arrow.textContent = "▼";
+
+    // Highlight active tab
+    document.querySelectorAll("#output-tabs div").forEach(btn => {
+      btn.classList.remove("bg-blue-500", "text-white");
+      btn.classList.add("bg-gray-200");
+    });
+
+    tab.classList.remove("bg-gray-200");
+    tab.classList.add("bg-blue-500", "text-white");
+
+    // Highlight device in list
+    document.querySelectorAll("#device-list-ul li").forEach(li => {
+      li.classList.remove("bg-blue-100");
+      if (li.dataset.id === deviceId) {
+        li.classList.add("bg-blue-100");
+      }
+    });
+
+    // Show output box
+    document.getElementById("run-output-container").classList.remove("hidden");
+    document.getElementById("terminal-container").classList.add("hidden");
+
+    // Load output
+    document.getElementById("run-output").textContent = deviceOutputs[deviceId];
+  }
+
+// function switchToDeviceTab(deviceId) {
+//   activeDeviceTab = deviceId;
+
+//   // Update selected device name
+//   const tab = document.getElementById(`tab-${deviceId}`);
+//   const deviceName = tab.querySelector(".tab-label").textContent;
+//   selectedDeviceName = deviceName;
+
+ 
+//   // Sync hidden selected device fields
+//   document.getElementById("selected-device").value = deviceId;
+//   document.getElementById("selected-device-name").value = selectedDeviceName;
+
+//   // Sync global selected device variables
+//   selectedDeviceId = deviceId;
+//   selectedDeviceName = selectedDeviceName;
+
+//   // Update dropdown title
+//   const title = document.getElementById("device-selector-title");
+//   title.textContent = `Run command on ${selectedDeviceName}`;
+
+//   // Update arrow (collapsed state)
+//   const arrow = document.getElementById("device-dropdown-arrow");
+//   arrow.textContent = "▼";
 
 
-<script>
+//   // Highlight device in device list
+//   document.querySelectorAll("#device-list-ul li").forEach(li => {
+//     li.classList.remove("bg-blue-100");
+//     if (li.dataset.id === deviceId) {
+//       li.classList.add("bg-blue-100");
+//     }
+//   });
+
+
+//   // Highlight active tab
+//   document.querySelectorAll("#output-tabs button").forEach(btn => {
+//     btn.classList.remove("bg-blue-500", "text-white");
+//     btn.classList.add("bg-gray-200");
+//   });
+
+//   const activeBtn = document.getElementById(`tab-${deviceId}`);
+//   activeBtn.classList.remove("bg-gray-200");
+//   activeBtn.classList.add("bg-blue-500", "text-white");
+
+//   // Show output box
+//   document.getElementById("run-output-container").classList.remove("hidden");
+//   document.getElementById("terminal-container").classList.add("hidden");
+
+//   // Load output for this device
+//   document.getElementById("run-output").textContent = deviceOutputs[deviceId];
+//   // document.getElementById("run-output-title").textContent = selectedDeviceName;
+// }
+
 function toggleDeviceDropdown() {
   const dd = document.getElementById("device-dropdown");
   const arrow = document.getElementById("device-dropdown-arrow");
@@ -434,30 +655,29 @@ function saveRunOutput() {
   URL.revokeObjectURL(url);
 }
 
+function showConfirm(message, onConfirm) {
+  const modal = document.getElementById("confirm-modal");
+  const msg = document.getElementById("confirm-modal-message");
+  const okBtn = document.getElementById("confirm-ok");
+  const cancelBtn = document.getElementById("confirm-cancel");
 
+  msg.textContent = message;
+
+  modal.classList.remove("hidden");
+
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    okBtn.onclick = null;
+    cancelBtn.onclick = null;
+  };
+
+  okBtn.onclick = () => {
+    cleanup();
+    onConfirm();
+  };
+
+  cancelBtn.onclick = cleanup;
+}
 
 </script>
-
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const list = document.getElementById("device-list-ul");
-  if (!list) return;
-
-  list.addEventListener("click", (event) => {
-    const li = event.target.closest("li");
-    if (!li || !list.contains(li)) return;
-
-    const deviceId = li.dataset.id;
-    const deviceName = li.dataset.name;
-    if (!deviceId) return;
-
-    setSelectedDevice(deviceId, deviceName);
-
-    list.querySelectorAll("li").forEach(item => item.classList.remove("bg-blue-100"));
-    li.classList.add("bg-blue-100");
-  });
-});
-</script>
-
-
 {% endblock %}

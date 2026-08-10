@@ -4,14 +4,14 @@ from sqlalchemy import select
 
 from core.db import get_db
 from core.security import verify_password, create_access_token
-from models.user import User
+from models.account import Account
 from schemas.auth import LoginRequest, Token
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/login", response_model=Token)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
-    stmt = select(User).where(User.username == data.username)
+    stmt = select(Account).where(Account.username == data.username)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
     if not user or not user.password_hash or not verify_password(data.password, user.password_hash):
