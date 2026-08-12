@@ -3,74 +3,90 @@
 
 <h1 class="text-2xl font-bold mb-6 text-center">Create Account</h1>
 
-<!-- Centered form container with same left/right gap as tables -->
 <div class="mt-6 px-4 flex justify-center">
   <div class="bg-white p-6 rounded shadow-md w-full max-w-xl">
 
-    <form method="post" action="/ui/accounts/create">
+    {% if error %}
+    <div class="mb-4 bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded">
+      {{ error }}
+    </div>
+    {% endif %}
 
-      
-      <label>Username</label>
+    <form method="post" action="/ui/accounts/create" onsubmit="return validateForm()">
+
+      <!-- Username -->
+      <label class="font-medium">Username *</label>
       <input name="username" class="border px-3 py-2 rounded w-full mb-4" required>
 
-      <label>Password</label>
-      <input name="password" type="password" class="border px-3 py-2 rounded w-full mb-4" required>
-       <p id="password_error" class="text-red-600 mb-4 hidden">
+      <!-- Password -->
+      <label class="font-medium">Password *</label>
+      <input id="password" name="password" type="password"
+             class="border px-3 py-2 rounded w-full mb-1" required>
+
+      <!-- Confirm Password -->
+      <label class="font-medium mt-2">Confirm Password *</label>
+      <input id="confirm_password" name="confirm_password" type="password"
+             class="border px-3 py-2 rounded w-full mb-1" required>
+
+      <p id="password_error" class="text-red-600 mb-4 hidden">
         Passwords do not match.
       </p>
 
-      <label class="block mb-2">Confirm Password</label>
-      <input name="confirm_password" type="password" class="border px-3 py-2 rounded w-full mb-4" required>
-
-      <label>Role</label>
-      <select name="role" class="border px-3 py-2 rounded w-full mb-4">
+      <!-- Role -->
+      <label class="font-medium">Role *</label>
+      <select name="role" class="border px-3 py-2 rounded w-full mb-4" required>
         <option value="user">User</option>
         <option value="operator">Operator</option>
         <option value="admin">Admin</option>
       </select>
 
-      <label>First Name</label>
+      <!-- First Name -->
+      <label class="font-medium">First Name</label>
       <input name="first_name" class="border px-3 py-2 rounded w-full mb-4">
 
-      <label>Last Name</label>
+      <!-- Last Name -->
+      <label class="font-medium">Last Name</label>
       <input name="last_name" class="border px-3 py-2 rounded w-full mb-4">
 
-      <label>Email</label>
+      <!-- Email -->
+      <label class="font-medium">Email</label>
       <input name="email" type="email" class="border px-3 py-2 rounded w-full mb-4">
 
-      <label>Source</label>
-      <select name="source" class="border px-3 py-2 rounded w-full mb-4">
+      <!-- Source -->
+      <label class="font-medium">Source *</label>
+      <select name="source" class="border px-3 py-2 rounded w-full mb-4" required>
         <option value="local">Local</option>
         <option value="ldap">LDAP</option>
         <option value="saml">SAML</option>
       </select>
 
-      <label>Profiles (comma separated)</label>
+      <!-- Profiles -->
+      <label class="font-medium">Profiles (comma separated)</label>
       <input name="profiles" class="border px-3 py-2 rounded w-full mb-4">
 
-      <button class="bg-blue-600 text-white px-4 py-2 rounded">Create Account</button>
-    </form>
-
-
+      <button class="bg-blue-600 text-white px-4 py-2 rounded w-full">
+        Create Account
+      </button>
     </form>
 
   </div>
 </div>
 
-
 <script>
-function validatePasswords() {
-  const pw = document.getElementById("password").value;
-  const cpw = document.getElementById("confirm_password").value;
+function validateForm() {
+  const pw = document.getElementById("password").value.trim();
+  const cpw = document.getElementById("confirm_password").value.trim();
   const error = document.getElementById("password_error");
 
+  // Password match check
   if (pw !== cpw) {
+    error.textContent = "Passwords do not match.";
     error.classList.remove("hidden");
-    return false; // stop form submission
+    return false;
   }
 
   error.classList.add("hidden");
-  return true; // allow form submission
+  return true;
 }
 </script>
 

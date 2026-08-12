@@ -12,12 +12,13 @@ from core.security import verify_password, create_access_token, hash_password
 from models.account import Account
 from core.device_loader import load_devices
 from core.audit_logger import log_action
+from core.settings import settings
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 templates = Jinja2Templates(directory="ui/templates")
 templates.env.cache.clear()
 
-
+# ========================== Separated ==========================
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     log_action(
@@ -35,44 +36,48 @@ async def login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
-    db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(Account).where(Account.username == username)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
+    log_action(
+        None,
+        "login_attempt",
+        f"Login attempt for username: {username}",
+        request,
+        category="authentication",
+    )
+    backend_login_url = f"{settings.backend_url}/api/login"
 
-    if not user or not verify_password(password, user.password_hash):
-        log_action(
-            None,
-            "login_failed",
-            "Invalid credentials",
-            request,
-            category="authentication",
-        )
+    # Call backend API
+    api_resp = await request.app.state.http_client.post(
+        backend_login_url,
+        json={"username": username, "password": password}
+    )
+
+    if api_resp.status_code != 200:
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Invalid username or password"},
             status_code=401,
         )
 
-    token = create_access_token({"sub": str(user.id), "role": user.role})
-    log_action(
-        user,
-        "login_success",
-        "Logged in successfully",
-        request,
-        category="authentication",
-    )
+    data = api_resp.json()
+    token = data["access_token"]
 
-    response = RedirectResponse(url="http://localhost:8000/ui/devices", status_code=302)
+    # Redirect to UI devices page
+    redirect_url = "/ui/devices"
+    response = RedirectResponse(url=redirect_url, status_code=302)
+
+    # Set session cookie
     response.set_cookie(
         key="session",
         value=token,
         httponly=True,
-        secure=False,  # set True in production
+        secure=False,  # True in production
         samesite="lax",
+        path="/",
     )
+
     return response
+
 
 @router.get("/logout")
 async def logout(

@@ -7,7 +7,8 @@
 <script src="https://cdn.jsdelivr.net/npm/xterm/lib/addons/fit/fit.js"></script>
 
 <h1 class="text-2xl font-bold mb-6 text-center">Device Connector</h1>
-
+<!-- Inline popup container -->
+<div id="inline-popup"></div>
 <div class="px-4">
 
 
@@ -265,7 +266,7 @@
     const cmd = document.getElementById("command-input").value;
 
     if (!deviceId) {
-      alert("Select a device first");
+      showInlinePopup("Select a device first");
       return;
     }
 
@@ -304,7 +305,7 @@
   function startInteractive() {
     const deviceId = getSelectedDevice();
     if (!deviceId) {
-      alert("Select a device first");
+      showInlinePopup("Select a device first");
       return;
     }
     // Hide run-output, show terminal
@@ -388,61 +389,7 @@
     tabs.appendChild(tab);
   }
 
-  // function addDeviceTab(deviceId, deviceName) {
-  //   const tabs = document.getElementById("output-tabs");
-  //   tabs.classList.remove("hidden");
-
-  //   const tab = document.createElement("button");
-  //   tab.id = `tab-${deviceId}`;
-  //   tab.textContent = deviceName;
-  //   tab.className = "px-3 py-1 rounded bg-gray-200 hover:bg-gray-300";
-  //   tab.onclick = () => switchToDeviceTab(deviceId);
-
-  //   tabs.appendChild(tab);
-  // }
-
-  // function closeDeviceTab(deviceId) {
-  //   const tab = document.getElementById(`tab-${deviceId}`);
-  //   const deviceName = tab.querySelector(".tab-label").textContent;
-
-
-  //   if (!confirm(`Close tab for ${deviceName}?`)) {
-  //     return;
-  //   }
-
-  //   // Remove tab element
-  //   const tab = document.getElementById(`tab-${deviceId}`);
-  //   if (tab) tab.remove();
-
-  //   // Remove stored output
-  //   delete deviceOutputs[deviceId];
-
-  //   // If this tab was active, switch to another tab
-  //   if (activeDeviceTab === deviceId) {
-  //     const remainingTabs = document.querySelectorAll("#output-tabs > div");
-
-  //     if (remainingTabs.length > 0) {
-  //       const firstTab = remainingTabs[0];
-  //       const newId = firstTab.id.replace("tab-", "");
-  //       switchToDeviceTab(newId);
-  //     } else {
-  //       // No tabs left → clear UI
-  //       activeDeviceTab = null;
-  //       selectedDeviceId = "";
-  //       selectedDeviceName = "";
-  //       document.getElementById("selected-device").value = "";
-  //       document.getElementById("selected-device-name").value = "";
-
-  //       document.getElementById("run-output").textContent = "";
-  //       document.getElementById("output-tabs").classList.add("hidden");
-
-  //       const title = document.getElementById("device-selector-title");
-  //       title.textContent = "Select a device to run command on";
-  //     }
-  //   }
-  // }
-
-  function closeDeviceTab(deviceId) {
+    function closeDeviceTab(deviceId) {
     const tab = document.getElementById(`tab-${deviceId}`);
     const deviceName = tab.querySelector(".tab-label").textContent;
 
@@ -523,59 +470,6 @@
     document.getElementById("run-output").textContent = deviceOutputs[deviceId];
   }
 
-// function switchToDeviceTab(deviceId) {
-//   activeDeviceTab = deviceId;
-
-//   // Update selected device name
-//   const tab = document.getElementById(`tab-${deviceId}`);
-//   const deviceName = tab.querySelector(".tab-label").textContent;
-//   selectedDeviceName = deviceName;
-
- 
-//   // Sync hidden selected device fields
-//   document.getElementById("selected-device").value = deviceId;
-//   document.getElementById("selected-device-name").value = selectedDeviceName;
-
-//   // Sync global selected device variables
-//   selectedDeviceId = deviceId;
-//   selectedDeviceName = selectedDeviceName;
-
-//   // Update dropdown title
-//   const title = document.getElementById("device-selector-title");
-//   title.textContent = `Run command on ${selectedDeviceName}`;
-
-//   // Update arrow (collapsed state)
-//   const arrow = document.getElementById("device-dropdown-arrow");
-//   arrow.textContent = "▼";
-
-
-//   // Highlight device in device list
-//   document.querySelectorAll("#device-list-ul li").forEach(li => {
-//     li.classList.remove("bg-blue-100");
-//     if (li.dataset.id === deviceId) {
-//       li.classList.add("bg-blue-100");
-//     }
-//   });
-
-
-//   // Highlight active tab
-//   document.querySelectorAll("#output-tabs button").forEach(btn => {
-//     btn.classList.remove("bg-blue-500", "text-white");
-//     btn.classList.add("bg-gray-200");
-//   });
-
-//   const activeBtn = document.getElementById(`tab-${deviceId}`);
-//   activeBtn.classList.remove("bg-gray-200");
-//   activeBtn.classList.add("bg-blue-500", "text-white");
-
-//   // Show output box
-//   document.getElementById("run-output-container").classList.remove("hidden");
-//   document.getElementById("terminal-container").classList.add("hidden");
-
-//   // Load output for this device
-//   document.getElementById("run-output").textContent = deviceOutputs[deviceId];
-//   // document.getElementById("run-output-title").textContent = selectedDeviceName;
-// }
 
 function toggleDeviceDropdown() {
   const dd = document.getElementById("device-dropdown");
@@ -677,6 +571,38 @@ function showConfirm(message, onConfirm) {
   };
 
   cancelBtn.onclick = cleanup;
+}
+
+function showInlinePopup(message) {
+  const modal = document.getElementById("confirm-modal");
+  const msg = document.getElementById("confirm-modal-message");
+  const okBtn = document.getElementById("confirm-ok");
+  const cancelBtn = document.getElementById("confirm-cancel");
+
+  // Set message
+  msg.textContent = message;
+
+  // Change modal title
+  document.getElementById("confirm-modal-title").textContent = "Notice";
+
+  // Show modal
+  modal.classList.remove("hidden");
+
+  // Hide cancel button
+  cancelBtn.style.display = "none";
+
+  // Change OK button text
+  okBtn.textContent = "OK";
+
+  const cleanup = () => {
+    modal.classList.add("hidden");
+    okBtn.onclick = null;
+    cancelBtn.onclick = null;
+    cancelBtn.style.display = ""; // restore for next confirm modal
+    okBtn.textContent = "Yes, close"; // restore default text
+  };
+
+  okBtn.onclick = cleanup;
 }
 
 </script>

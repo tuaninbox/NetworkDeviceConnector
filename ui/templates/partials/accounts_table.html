@@ -1,28 +1,43 @@
 {% for u in accounts %}
 <tr id="row-{{ u.id }}" class="border-b hover:bg-gray-50">
-  <td class="px-4 py-2">{{ u.username }}</td>
+
+  <!-- Username -->
+  <td class="px-4 py-2 font-medium">{{ u.username }}</td>
+
+  <!-- First Name -->
+  <td class="px-4 py-2">{{ u.first_name or "" }}</td>
+
+  <!-- Last Name -->
+  <td class="px-4 py-2">{{ u.last_name or "" }}</td>
+
+  <!-- Email -->
+  <td class="px-4 py-2">{{ u.email or "" }}</td>
+
+  <!-- Role -->
+  <td class="px-4 py-2">{{ u.role }}</td>
+
+  <!-- Source -->
+  <td class="px-4 py-2">{{ u.source }}</td>
+
+  <!-- Profiles -->
   <td class="px-4 py-2">
-    {% if u.role == "requester_approver" %}
-      Requester & Approver
-    {% elif u.role == "requester" %}
-      Requester
-    {% elif u.role == "approver" %}
-      Approver
-    {% elif u.role == "admin" %}
-      Admin
+    {% if u.profiles %}
+      {{ u.profiles | join(", ") }}
     {% else %}
-      {{ u.role }}
+      —
     {% endif %}
   </td>
+
+  <!-- Actions -->
   <td class="px-4 py-2 space-x-2">
 
-    <!-- Edit (full page, no HTMX) -->
+    <!-- Edit -->
     <a href="/ui/accounts/{{ u.id }}/edit"
        class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">
       Edit
     </a>
 
-    <!-- Delete (inline confirmation via HTMX) -->
+    <!-- Delete (HTMX inline) -->
     <button
       class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
       hx-get="/ui/accounts/{{ u.id }}/delete-inline"
@@ -32,5 +47,6 @@
     </button>
 
   </td>
+
 </tr>
 {% endfor %}

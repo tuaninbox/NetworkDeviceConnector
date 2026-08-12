@@ -57,24 +57,14 @@
       </li>
       {% else %}
       <li>
-        <a href="/ui/account/{{ current_user.id }}"
+        <a href="/ui/accounts/{{ current_user.id }}"
            class="text-gray-700 px-3 py-1 rounded-md transition hover:bg-blue-600 hover:text-white">
           My Account
         </a>
       </li>
       {% endif %}
 
-      <!-- Requests -->
-      {% if current_user.role in ["requester","approver","requester_approver"] %}
-      <li>
-        <a href="/ui/requests"
-           class="text-gray-700 px-3 py-1 rounded-md transition hover:bg-blue-600 hover:text-white">
-          Requests
-        </a>
-      </li>
-      {% endif %}
-
-      <!-- Audit Logs -->
+       <!-- Audit Logs -->
       {% if current_user.role == "admin" %}
       <li>
         <a href="/ui/logs"

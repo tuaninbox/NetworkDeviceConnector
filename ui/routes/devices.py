@@ -12,6 +12,7 @@ from core.security import verify_password, create_access_token, hash_password
 from models.account import Account
 from core.device_loader import load_devices
 from core.audit_logger import log_action
+from core.settings import settings
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 templates = Jinja2Templates(directory="ui/templates")
@@ -26,8 +27,9 @@ async def devices_page(
         return RedirectResponse("/ui/login")
 
     # Load devices from backend API
-    
-    api_url = f"{request.url.scheme}://{request.url.hostname}:{request.url.port}/api/devices/"
+    # Load backend URL from settings
+
+    api_url = f"{settings.backend_url}/api/devices/"
 
 # Forward user cookies to API
     cookies = request.cookies

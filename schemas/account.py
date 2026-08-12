@@ -11,13 +11,14 @@ class AccountBase(BaseModel):
     profiles: Optional[List[str]] = None
 
 class AccountRead(AccountBase):
-    username: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: Optional[str] = None
-    role: str = "user"
-    source: str = "local"
-    profiles: Optional[List[str]] = None
+    id: int
+    # username: str
+    # first_name: Optional[str] = None
+    # last_name: Optional[str] = None
+    # email: Optional[str] = None
+    # role: str = "user"
+    # source: str = "local"
+    # profiles: Optional[List[str]] = None
 
     class Config:
         from_attributes = True
@@ -29,9 +30,33 @@ class AccountCreate(AccountBase):
     class Config:
         from_attributes = True
 
+# class AccountUpdate(BaseModel):
+#     username: Optional[str] = None
+#     first_name: Optional[str] = None
+#     last_name: Optional[str] = None
+#     email: Optional[str] = None
+#     role: Optional[str] = None
+#     source: Optional[str] = None
+#     profiles: Optional[List[str]] = None
+
+#     new_password: Optional[str] = None
+#     confirm_password: Optional[str] = None
+
+#     class Config:
+#         from_attributes = True
+
 class AccountUpdate(AccountBase):
     new_password: Optional[str] = None
     confirm_password: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class AccountSelfUpdate(BaseModel):
+    username: str | None = None
+    email: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    current_password: str
+    new_password: str | None = None
+    confirm_password: str | None = None
