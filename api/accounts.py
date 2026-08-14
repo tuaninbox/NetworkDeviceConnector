@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from core.audit_logger import log_action
 from core.db import get_db
 from deps.auth import get_current_user_optional, get_current_user
 from core.permissions import has_permission
@@ -31,21 +31,49 @@ async def api_create_account(
     # Permission check
     roles = request.app.state.roles
     if not has_permission(current_user.role, "create_accounts", roles):
+        log_action(
+            None,
+            "account_create",
+            f"Account Creation - Permission Denied",
+            request,
+            category="account",
+        )
         raise HTTPException(status_code=403, detail="Permission denied")
 
     try:
         validate_username(payload.username)
     except UsernameValidationError as e:
+        log_action(
+            None,
+            "account_create",
+            f"Account Creation - User Invalid",
+            request,
+            category="account",
+        )
         raise HTTPException(status_code=400, detail=str(e))
     
     # Password confirmation
     if payload.password != payload.confirm_password:
+        log_action(
+            None,
+            "account_create",
+            f"Account Creation - Passwords do not match",
+            request,
+            category="account",
+        )
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
     # Password complexity check
     try:
         validate_password_complexity(payload.password)
     except PasswordValidationError as e:
+        log_action(
+            None,
+            "account_create",
+            f"Account Creation - Password invalid",
+            request,
+            category="account",
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     # Username uniqueness
@@ -69,7 +97,13 @@ async def api_create_account(
     db.add(acc)
     await db.commit()
     await db.refresh(acc)
-
+    log_action(
+            None,
+            "account_create",
+            f"Account {acc.username} created successfully",
+            request,
+            category="account",
+    )    
     return acc
 
 # ---------------------------------------------------------
@@ -77,12 +111,20 @@ async def api_create_account(
 # ---------------------------------------------------------
 @router.get("/accounts", response_model=list[AccountRead])
 async def list_accounts(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: Account | None = Depends(get_current_user_optional),
 ):
     stmt = select(Account)
     result = await db.execute(stmt)
     accounts = result.scalars().all()
+    log_action(
+        None,
+        "account_create",
+        f"Account Creation - Permission Denied",
+        request,
+        category="account",
+    )        
     return accounts
 
 # ---------------------------------------------------------
@@ -98,18 +140,39 @@ async def api_edit_account(
 ):
     # Auth check
     if current_user is None or current_user.role != "admin":
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Admin Access Require",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=401, detail="Admin access required")
 
     # Fetch user
     stmt = select(Account).where(Account.id == user_id)
     account = (await db.execute(stmt)).scalar_one_or_none()
     if not account:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Account not found",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=404, detail="Account not found")
 
     # Prevent demoting last admin
     stmt = select(Account).where(Account.role == "admin")
     admins = (await db.execute(stmt)).scalars().all()
     if account.role == "admin" and payload.role != "admin" and len(admins) == 1:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Can't change role of last admin",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=400, detail="Cannot change role of the last admin")
 
     # Username uniqueness
@@ -117,6 +180,13 @@ async def api_edit_account(
         try:
             validate_username(payload.username)
         except UsernameValidationError as e:
+            log_action(
+                None,
+                "account_modify",
+                f"Account Modify - Username is not unique",
+                request,
+                category="account",
+            )  
             raise HTTPException(status_code=400, detail=str(e))
         stmt = select(Account).where(Account.username == payload.username)
         existing = (await db.execute(stmt)).scalar_one_or_none()
@@ -153,7 +223,13 @@ async def api_edit_account(
     try:
         validate_password_complexity(payload.new_password)
     except PasswordValidationError as e:
-        print(str(e))
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Password Complexity didn't meet",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=400, detail=str(e))
 
     await db.commit()
@@ -165,7 +241,14 @@ async def api_edit_account(
 # VIEW SELF ACCOUNT - Need to be before get("/accounts/{user_id}")
 # ---------------------------------------------------------
 @router.get("/accounts/me", response_model=AccountRead)
-async def api_get_self(current_user: Account = Depends(get_current_user)):
+async def api_get_self(request: Request, current_user: Account = Depends(get_current_user)):
+    log_action(
+        None,
+        "account_query",
+        f"Account Query - View Self Account",
+        request,
+        category="account",
+    )  
     return current_user
 
 # ---------------------------------------------------------
@@ -173,11 +256,19 @@ async def api_get_self(current_user: Account = Depends(get_current_user)):
 # ---------------------------------------------------------
 @router.get("/accounts/{user_id}", response_model=AccountRead)
 async def api_get_account(
+    request: Request,
     user_id: int,
     current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     if current_user is None or current_user.role != "admin":
+        log_action(
+            None,
+            "account_query",
+            f"Account query - View account to edit - refused due to permission",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=401, detail="Admin access required")
 
     stmt = select(Account).where(Account.id == user_id)
@@ -186,6 +277,13 @@ async def api_get_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    log_action(
+        None,
+        "account_query",
+        f"Account Query - View account to edit",
+        request,
+        category="account",
+    )  
     return account
 
 # ---------------------------------------------------------
@@ -233,12 +331,20 @@ async def api_get_account(
 # ---------------------------------------------------------
 @router.delete("/accounts/{user_id}", response_model=list[AccountRead])
 async def api_delete_account(
+    request: Request,
     user_id: int,
     current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     # Must be admin
     if current_user is None or current_user.role != "admin":
+        log_action(
+            None,
+            "account_delete",
+            f"Account Delete - Delete account - Refused due to permission",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=401, detail="Admin access required")
 
     # Count admins BEFORE deleting
@@ -265,6 +371,13 @@ async def api_delete_account(
     stmt = select(Account)
     accounts = (await db.execute(stmt)).scalars().all()
 
+    log_action(
+        None,
+        "account_delete",
+        f"Account Delete - Account {Account.username} deleted by {current_user.username}",
+        request,
+        category="account",
+    )  
     return accounts
 
 # SELF ENDPOINTS
@@ -274,6 +387,7 @@ async def api_delete_account(
 # ---------------------------------------------------------
 @router.put("/account/{user_id}", response_model=AccountRead)
 async def api_update_account_self(
+    request: Request,
     user_id: int,
     payload: AccountSelfUpdate,
     current_user: Account | None = Depends(get_current_user_optional),
@@ -281,10 +395,24 @@ async def api_update_account_self(
 ):
     # Must be logged in
     if current_user is None:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Update self account - refused due to permission",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     # Only admin or self can update
     if current_user.role != "admin" and current_user.id != user_id:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - only admin can update others' account",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Fetch account
@@ -292,6 +420,13 @@ async def api_update_account_self(
     account = (await db.execute(stmt)).scalar_one_or_none()
 
     if not account:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - Account {Account.username} not found",
+            request,
+            category="account",
+        )  
         raise HTTPException(status_code=404, detail="Account not found")
 
     # Verify current password
@@ -300,6 +435,13 @@ async def api_update_account_self(
 
     # Username cannot be changed by self
     if payload.username is not None and payload.username != account.username:
+        log_action(
+            None,
+            "account_modify",
+            f"Account Modify - can't change own username {Account.username}",
+            request,
+            category="account",
+        )  
         raise HTTPException(
             status_code=400,
             detail="You cannot change your username."
@@ -343,7 +485,13 @@ async def api_update_account_self(
 
     await db.commit()
     await db.refresh(account)
-
+    log_action(
+        current_user.username,
+        "account_modify",
+        f"Account Modify - account {current_user.username} updated",
+        request,
+        category="account",
+    )  
     return account
 
 

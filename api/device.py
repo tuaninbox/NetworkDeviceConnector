@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Body, HTTPException, Request, WebSocket, WebSocketDisconnect
-
+from fastapi import APIRouter, Body, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
+from deps.auth import get_current_user_optional
+from models.account import Account
+from core.audit_logger import log_action
 router = APIRouter(prefix="/connector", tags=["Device Connector"])
 
 
@@ -15,7 +17,9 @@ def get_device(request: Request, device_id: str) -> dict:
 # Run a single command
 # ---------------------------
 @router.post("/{device_id}/run")
-async def run_command(request: Request, device_id: str, command: str = Body(..., embed=True)):
+async def run_command(request: Request, device_id: str, 
+                    current_user: Account | None = Depends(get_current_user_optional),
+                    command: str = Body(..., embed=True)):
     device = get_device(request, device_id)
     ssh_manager = request.app.state.ssh_manager
 
@@ -24,6 +28,13 @@ async def run_command(request: Request, device_id: str, command: str = Body(...,
 
     # Check if command starts with any allowed prefix
     if not any(command.lower().startswith(prefix) for prefix in allowed_prefixes):
+        log_action(
+            None,
+            "command_run",
+            f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
+            request,
+            category="connector",
+        )
         raise HTTPException(
             status_code=400,
             detail=(
@@ -43,6 +54,13 @@ async def run_command(request: Request, device_id: str, command: str = Body(...,
     ]
 
     if any(keyword in command for keyword in blocked_keywords):
+        log_action(
+            None,
+            "command_run",
+            f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
+            request,
+            category="connector",
+        )
         raise HTTPException(
             status_code=400,
             detail=f"Command '{command}' is blocked for safety reasons."
@@ -51,10 +69,25 @@ async def run_command(request: Request, device_id: str, command: str = Body(...,
     # Prevent command injection attempts
     forbidden_chars = [";", "&", "`", "$(", ">", "<", "&&", "||"]
     if any(char in command for char in forbidden_chars):
+        log_action(
+            None,
+            "command_run",
+            f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
+            request,
+            category="connector",
+        )
         raise HTTPException(
             status_code=400,
             detail="Invalid command."
         )
+
+    log_action(
+        current_user,
+        "command_run",
+        f"Command \"{command}\" run on {device["name"]} - {device["ip"]} - successfully",
+        request,
+        category="connector",
+    )
     output = await ssh_manager.run_single_command(device, command)
     return {"output": output}
 

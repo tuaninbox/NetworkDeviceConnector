@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from core.audit_logger import log_action
 from core.db import get_db
 from core.security import verify_password, create_access_token
 from models.account import Account
@@ -28,6 +29,14 @@ async def login(
 
     # Brute-force protection
     if await too_many_attempts(ip, username):
+        log_action(
+            None,
+            "login_attempt",
+            f"Too many failed login attempts for username: {username}",
+            request,
+            category="authentication",
+        )
+        
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many failed login attempts. Try again later."
@@ -41,6 +50,13 @@ async def login(
     # Invalid login
     if not user or not verify_password(data.password, user.password_hash):
         record_failed_attempt(ip, username)
+        log_action(
+            None,
+            "login_attempt",
+            f"Invalid credentials for username: {username}",
+            request,
+            category="authentication",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
@@ -48,7 +64,13 @@ async def login(
 
     # Successful login → clear failures
     clear_attempts(ip, username)
-
+    log_action(
+        None,
+        "login_success",
+        f"Successful Login for username: {username}",
+        request,
+        category="authentication",
+    )
     token = create_access_token({"sub": str(user.id), "role": user.role})
     return Token(access_token=token, token_type="bearer")
 
