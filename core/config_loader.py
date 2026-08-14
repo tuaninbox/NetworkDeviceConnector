@@ -25,3 +25,12 @@ def load_config(path: str = "config/config.yaml") -> Dict[str, Any]:
                     config[section][key] = os.environ[env_key]
 
     return config
+
+def main():
+    config = load_config()
+    print("Loaded configuration:")
+    print(config)
+
+
+if __name__ == "__main__":
+    main()

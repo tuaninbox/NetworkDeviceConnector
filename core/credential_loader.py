@@ -4,37 +4,65 @@ import configparser
 from pathlib import Path
 from typing import Dict, Any
 
+
 def load_credentials(config: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Load credentials from either YAML or INI-style credential files.
+    Load credentials with correct priority:
 
-    Supports formats:
+    1. ENV variables (highest priority)
+        DEVICE_USERNAME → tacacs.username
+        DEVICE_PASSWORD → tacacs.password
+        NAGIOS_HOST     → nagios.nagios_host
+        NAGIOS_APIKEY   → nagios.nagios_apikey
 
-    --- YAML ---
-    tacacs:
-      username: admin
-      password: cisco
+    2. Credential file (YAML or INI) fallback
 
-    --- INI ---
-    [tacacs]
-    username=admin
-    password=cisco
+    3. Normalize keys so final structure is:
 
-    Returns normalized dict:
-    {
-        "tacacs": {"username": "admin", "password": "cisco"},
-        "nagios": {"apihost": "...", "apikey": "..."}
-    }
+        {
+            "tacacs": {"username": "...", "password": "..."},
+            "nagios": {"nagios_host": "...", "nagios_apikey": "..."}
+        }
     """
 
-    # Get credential file path from config
+    # -----------------------------
+    # STEP 1 — Prepare empty result
+    # -----------------------------
+    normalized: Dict[str, Dict[str, Any]] = {
+        "tacacs": {},
+        "nagios": {},
+    }
+
+    # -----------------------------
+    # STEP 2 — Load ENV first
+    # -----------------------------
+    # TACACS
+    env_tacacs_user = os.getenv("DEVICE_USERNAME")
+    env_tacacs_pass = os.getenv("DEVICE_PASSWORD")
+
+    if env_tacacs_user:
+        normalized["tacacs"]["username"] = env_tacacs_user
+    if env_tacacs_pass:
+        normalized["tacacs"]["password"] = env_tacacs_pass
+
+    # NAGIOS
+    env_nagios_host = os.getenv("NAGIOS_HOST")
+    env_nagios_api = os.getenv("NAGIOS_APIKEY")
+
+    if env_nagios_host:
+        normalized["nagios"]["nagios_host"] = env_nagios_host
+    if env_nagios_api:
+        normalized["nagios"]["nagios_apikey"] = env_nagios_api
+
+    # -----------------------------
+    # STEP 3 — Load file ONLY IF ENV missing
+    # -----------------------------
     cred_section = config.get("credentials", {})
     cred_file = cred_section.get("file")
 
     if not cred_file:
         raise ValueError("credentials.file is missing in config/config.yaml")
 
-    # Support both "credentials" and "credentials.yaml"
     possible_paths = [
         Path(f"{cred_file}.yaml"),
         Path(f"{cred_file}.yml"),
@@ -44,105 +72,87 @@ def load_credentials(config: Dict[str, Any]) -> Dict[str, Any]:
     ]
 
     cred_path = next((p for p in possible_paths if p.exists()), None)
-
     if not cred_path:
         raise FileNotFoundError(f"Credential file not found: {cred_file}")
 
-    # --- Detect format ---
     ext = cred_path.suffix.lower()
 
-    normalized: Dict[str, Dict[str, Any]] = {}
-
+    # YAML loader
     if ext in [".yaml", ".yml"]:
-        # YAML loader
         with open(cred_path, "r") as f:
             raw = yaml.safe_load(f) or {}
 
         for section, items in raw.items():
-            if isinstance(items, list):
+            if isinstance(items, dict):
+                for key, value in items.items():
+                    # Only fill missing ENV values
+                    if key not in normalized.get(section, {}):
+                        normalized.setdefault(section, {})[key] = value
+
+            elif isinstance(items, list):
                 merged = {}
                 for entry in items:
                     if isinstance(entry, dict):
                         merged.update(entry)
-                normalized[section] = merged
-            elif isinstance(items, dict):
-                normalized[section] = items
-            else:
-                normalized[section] = {}
 
+                for key, value in merged.items():
+                    if key not in normalized.get(section, {}):
+                        normalized.setdefault(section, {})[key] = value
+
+    # INI loader
     else:
-        # INI loader
         parser = configparser.ConfigParser()
         parser.read(cred_path)
 
         for section in parser.sections():
-            normalized[section] = dict(parser.items(section))
+            for key, value in parser.items(section):
+                if key not in normalized.get(section, {}):
+                    normalized.setdefault(section, {})[key] = value
+
+    # -----------------------------
+    # STEP 4 — Normalize key names
+    # -----------------------------
+    # Accept nagios_api or nagios_apikey
+    nagios = normalized["nagios"]
+
+    if "nagios_api" in nagios:
+        nagios["nagios_apikey"] = nagios["nagios_api"]
+
+    # Ensure keys exist
+    nagios.setdefault("nagios_host", "")
+    nagios.setdefault("nagios_apikey", "")
+
+    tacacs = normalized["tacacs"]
+    tacacs.setdefault("username", "")
+    tacacs.setdefault("password", "")
 
     return normalized
 
 
-def load_credentials_yaml(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Load credentials from the credentials file defined in config/config.yaml.
+def main():
+    from core.config_loader import load_config
 
-    Supports credential files structured like:
+    print("Loading config...")
+    config = load_config()
+    print("Loaded config:")
+    print(config)
 
-    tacacs:
-      - username: admin
-      - password: cisco
+    print("\nLoading credentials (ENV → file fallback)...")
+    creds = load_credentials(config)
+    print("Loaded credentials:")
+    print(creds)
 
-    nagios:
-      - apihost: 10.1.1.1
-      - apikey: ABC123
+    # Merge credentials into config
+    if "credentials" in config:
+        config["credentials"]["loaded"] = creds
 
-    Returns a normalized dict:
+    print("\nFinal merged credential structure:")
+    print(config["credentials"]["loaded"])
 
-    {
-        "tacacs": {"username": "admin", "password": "cisco"},
-        "nagios": {"apihost": "...", "apikey": "..."}
-    }
-    """
 
-    # Get credential file path from config
-    cred_section = config.get("credentials", {})
-    cred_file = cred_section.get("file")
+if __name__ == "__main__":
+    main()
 
-    if not cred_file:
-        raise ValueError("credentials.file is missing in config/config.yaml")
-
-    # Support both "credentials" and "credentials.yaml"
-    possible_paths = [
-        Path(f"{cred_file}.yaml"),
-        Path(f"{cred_file}.yml"),
-        Path(cred_file)
-    ]
-
-    cred_path = next((p for p in possible_paths if p.exists()), None)
-
-    if not cred_path:
-        raise FileNotFoundError(f"Credential file not found: {cred_file}")
-
-    # Load YAML
-    with open(cred_path, "r") as f:
-        raw = yaml.safe_load(f) or {}
-
-    normalized: Dict[str, Dict[str, Any]] = {}
-
-    # Normalize list-style credentials into dicts
-    for section, items in raw.items():
-        if isinstance(items, list):
-            # Convert list of {key: value} into a single dict
-            merged = {}
-            for entry in items:
-                if isinstance(entry, dict):
-                    merged.update(entry)
-            normalized[section] = merged
-        elif isinstance(items, dict):
-            normalized[section] = items
-        else:
-            normalized[section] = {}
-
-    return normalized
 
 # Usage:
 # from core.config_loader import load_config

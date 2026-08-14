@@ -18,6 +18,43 @@ def get_device(request: Request, device_id: str) -> dict:
 async def run_command(request: Request, device_id: str, command: str = Body(..., embed=True)):
     device = get_device(request, device_id)
     ssh_manager = request.app.state.ssh_manager
+
+    # allow prefix
+    allowed_prefixes = ["sh", "show", "ping", "dir"]
+
+    # Check if command starts with any allowed prefix
+    if not any(command.lower().startswith(prefix) for prefix in allowed_prefixes):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid command. Allowed commands must start with: "
+                "sh, show, ping, or dir."
+            )
+        )
+    # Block list (dangerous commands)
+    blocked_keywords = [
+        # Full dangerous commands
+        "reload", "reboot", "format", "erase", "delete", "shutdown",
+        "configure", "conf t", "conf terminal", "debug", "write", "copy",
+
+        # Short versions
+        "re ", "re-", "reboot", "wr", "wr mem", "wr memory",
+        "shut", "del", "deb", "conf", "no ", "no-", "no_"
+    ]
+
+    if any(keyword in command for keyword in blocked_keywords):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Command '{command}' is blocked for safety reasons."
+        )
+    
+    # Prevent command injection attempts
+    forbidden_chars = [";", "&", "`", "$(", ">", "<", "&&", "||"]
+    if any(char in command for char in forbidden_chars):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid command."
+        )
     output = await ssh_manager.run_single_command(device, command)
     return {"output": output}
 

@@ -137,7 +137,7 @@ async def accounts_edit_submit_page(
                 "request": request,
                 "current_user": current_user,
                 "user": user_data,
-                "error": data.get("error") or "Unknown error",
+                "error": data.get("detail") or data.get("error") or "Unknown error",
             },
         )
 
@@ -663,7 +663,7 @@ async def account_self_edit(
         return RedirectResponse("/ui/login")
 
     # Backend URL (new rule)
-    api_url = f"{settings.backend_url}/api/accounts/{current_user.id}"
+    api_url = f"{settings.backend_url}/api/account/{current_user.id}"
 
     payload = {
         "username": username,
@@ -683,7 +683,12 @@ async def account_self_edit(
 
     # Handle backend validation errors
     if api_resp.status_code != 200:
-        error = api_resp.json().get("detail", "Unknown error")
+        try:
+            data = api_resp.json()
+            error = data.get("detail", "Unknown error")
+        except Exception:
+            error = api_resp.text or "Unknown error"
+
 
         log_action(
             current_user,
@@ -833,68 +838,18 @@ async def account_self_edit_page(
 
 
 
-@router.get("/account/{account_id}/edit", response_class=HTMLResponse)
-async def account_edit_page(
-    request: Request,
-    account_id: int,
-    current_user: Account = Depends(get_current_user_optional),
-    db: AsyncSession = Depends(get_db),
-):
-    roles = request.app.state.roles
-
-    # Permission check: user can edit themselves OR admin can edit anyone
-    if current_user.id != account_id and not has_permission(current_user.role, "update_accounts", roles):
-        return RedirectResponse("/ui/login")
-
-    # Fetch account
-    result = await db.execute(select(Account).where(Account.id == account_id))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        return HTMLResponse("Account not found", status_code=404)
-
-    return templates.TemplateResponse(
-        "account_edit.html",
-        {
-            "request": request,
-            "user": user,
-            "current_user": current_user,
-        },
-    )
-
-# @router.post("/account/{account_id}/edit")
-# async def account_edit_submit(
+# @router.get("/account/{account_id}/edit", response_class=HTMLResponse)
+# async def account_edit_page(
 #     request: Request,
 #     account_id: int,
-#     username: str = Form(...),
-#     first_name: str = Form(None),
-#     last_name: str = Form(None),
-#     email: str = Form(None),
-#     role: str = Form(...),
-#     source: str = Form(...),
-#     profiles: str = Form(""),
-#     new_password: str = Form(""),
-#     confirm_password: str = Form(""),
 #     current_user: Account = Depends(get_current_user_optional),
 #     db: AsyncSession = Depends(get_db),
 # ):
 #     roles = request.app.state.roles
 
-#     # Permission check
+#     # Permission check: user can edit themselves OR admin can edit anyone
 #     if current_user.id != account_id and not has_permission(current_user.role, "update_accounts", roles):
 #         return RedirectResponse("/ui/login")
-
-#     # Password validation
-#     if new_password or confirm_password:
-#         if new_password != confirm_password:
-#             return templates.TemplateResponse(
-#                 "account_edit.html",
-#                 {
-#                     "request": request,
-#                     "user": current_user,
-#                     "error": "Passwords do not match",
-#                 },
-#             )
 
 #     # Fetch account
 #     result = await db.execute(select(Account).where(Account.id == account_id))
@@ -903,18 +858,13 @@ async def account_edit_page(
 #     if not user:
 #         return HTMLResponse("Account not found", status_code=404)
 
-#     # Update fields
-#     user.username = username
-#     user.first_name = first_name
-#     user.last_name = last_name
-#     user.email = email
-#     user.role = role
-#     user.source = source
-#     user.profiles = [p.strip() for p in profiles.split(",") if p.strip()]
+#     return templates.TemplateResponse(
+#         "account_edit.html",
+#         {
+#             "request": request,
+#             "user": user,
+#             "current_user": current_user,
+#         },
+#     )
 
-#     if new_password:
-#         user.password_hash = hash_password(new_password)
 
-#     await db.commit()
-
-#     return RedirectResponse(f"/ui/account/{account_id}", status_code=303)

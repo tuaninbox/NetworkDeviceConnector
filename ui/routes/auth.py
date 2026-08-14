@@ -44,6 +44,7 @@ async def login_submit(
         request,
         category="authentication",
     )
+
     backend_login_url = f"{settings.backend_url}/api/login"
 
     # Call backend API
@@ -52,21 +53,41 @@ async def login_submit(
         json={"username": username, "password": password}
     )
 
+    # -----------------------------
+    # Handle LOCKOUT (429)
+    # -----------------------------
+    if api_resp.status_code == 429:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "error": "Too many failed attempts. Your account is locked for 10 minutes."
+            },
+            status_code=429,
+        )
+
+    # -----------------------------
+    # Handle invalid login (401)
+    # -----------------------------
     if api_resp.status_code != 200:
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "Invalid username or password"},
+            {
+                "request": request,
+                "error": "Invalid username or password"
+            },
             status_code=401,
         )
 
+    # -----------------------------
+    # Successful login
+    # -----------------------------
     data = api_resp.json()
     token = data["access_token"]
 
-    # Redirect to UI devices page
     redirect_url = "/ui/devices"
     response = RedirectResponse(url=redirect_url, status_code=302)
 
-    # Set session cookie
     response.set_cookie(
         key="session",
         value=token,
@@ -77,6 +98,7 @@ async def login_submit(
     )
 
     return response
+
 
 
 @router.get("/logout")

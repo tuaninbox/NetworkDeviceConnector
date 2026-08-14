@@ -36,8 +36,8 @@ class SSHManager:
         # Lazy-load TACACS credentials only when needed
         if not username or not password:
             creds = self.app.state.credential_loader(self.app.state.config)
-            username = creds["tacacs"]["username"]
-            password = creds["tacacs"]["password"]
+            username = creds["tacacs"]["username"] or creds["credentials"]["username"]
+            password = creds["tacacs"]["password"] or creds["credentials"]["password"]
 
         conn = driver_cls(
             host=device["ip"],

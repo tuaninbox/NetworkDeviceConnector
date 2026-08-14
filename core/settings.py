@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_exp_minutes: int = 60
 
-    # Nagios XI / Core API
-    nagios_url: str = "https://nagios.example.com"
-    nagios_api_token: str | None = None  # or username/password if you prefer
-    nagios_verify_ssl: bool = True
+    # # Nagios XI / Core API
+    # nagios_url: str = "https://nagios.example.com"
+    # nagios_api_token: str | None = None  # or username/password if you prefer
+    # nagios_verify_ssl: bool = True
 
     # Audit Logging Configuration
     log_folder: str = "logs"

@@ -1,0 +1,18 @@
+mapping:
+  - pattern: ".*dmi.*"
+    zone: "NIS"
+
+  - pattern: ".*dms.*"
+    zone: "DMZ"
+
+  - pattern: ".*dmn.*"
+    zone: "DMZ"
+
+  - pattern: ".*fab.*"
+    zone: "Fabric"
+
+  - pattern: ".*gcc.*"
+    zone: "NPS"
+
+  - pattern: ".*meb.*"
+    zone: "NPS"
