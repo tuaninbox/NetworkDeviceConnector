@@ -20,9 +20,10 @@ templates.env.cache.clear()
 
 # ========================== Separated ==========================
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
+async def login_page(request: Request, 
+    current_user: Account | None = Depends(get_current_user_optional),):
     log_action(
-        None,
+        current_user,
         "page_view",
         "Viewed login page",
         request,
@@ -34,11 +35,25 @@ async def login_page(request: Request):
 @router.post("/login")
 async def login_submit(
     request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
+    current_user: Account | None = Depends(get_current_user_optional),
+    username: str | None = Form(None),
+    password: str | None = Form(None),
 ):
+
+
+    # Both missing
+    if not username or not password:
+        return templates.TemplateResponse(
+            "login.html",
+            {
+                "request": request,
+                "error": "Username and password are required"
+            },
+            status_code=400,
+        )
+
     log_action(
-        None,
+        current_user,
         "login_attempt",
         f"Login attempt for username: {username}",
         request,
@@ -118,7 +133,7 @@ async def logout(
     else:
         # Anonymous logout attempt
         log_action(
-            None,
+            current_user.username,
             "logout",
             "Anonymous user attempted logout",
             request,

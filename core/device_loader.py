@@ -30,7 +30,6 @@ async def load_devices(config: Dict[str, Any]) -> List[Dict]:
     """
 
     source = config["devices"]["source"]
-
     # ------------------------------------------------------------
     # Load from file
     # ------------------------------------------------------------

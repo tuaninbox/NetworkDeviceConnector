@@ -6,6 +6,7 @@ from core.audit_logger import log_action
 from core.db import get_db
 from core.security import verify_password, create_access_token
 from models.account import Account
+from deps.auth import get_current_user_optional
 from schemas.auth import LoginRequest, Token
 from core.security import (
     too_many_attempts,
@@ -22,15 +23,22 @@ router = APIRouter(prefix="/api", tags=["auth"])
 async def login(
     data: LoginRequest,
     request: Request,
+    current_user: Account | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     ip = request.client.host
-    username = data.username
+   # NOTE: Username and Password are required
+    if not data.username or not data.password:
+        raise HTTPException(
+            status_code=400,
+            detail="Username and Password are required"
+        )
 
+    username = data.username
     # Brute-force protection
     if await too_many_attempts(ip, username):
         log_action(
-            None,
+            current_user.username,
             "login_attempt",
             f"Too many failed login attempts for username: {username}",
             request,
@@ -51,7 +59,7 @@ async def login(
     if not user or not verify_password(data.password, user.password_hash):
         record_failed_attempt(ip, username)
         log_action(
-            None,
+            current_user.username,
             "login_attempt",
             f"Invalid credentials for username: {username}",
             request,
@@ -65,7 +73,7 @@ async def login(
     # Successful login → clear failures
     clear_attempts(ip, username)
     log_action(
-        None,
+        current_user,
         "login_success",
         f"Successful Login for username: {username}",
         request,

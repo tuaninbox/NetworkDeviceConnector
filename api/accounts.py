@@ -32,7 +32,7 @@ async def api_create_account(
     roles = request.app.state.roles
     if not has_permission(current_user.role, "create_accounts", roles):
         log_action(
-            None,
+            current_user.username,
             "account_create",
             f"Account Creation - Permission Denied",
             request,
@@ -44,7 +44,7 @@ async def api_create_account(
         validate_username(payload.username)
     except UsernameValidationError as e:
         log_action(
-            None,
+            current_user.username,
             "account_create",
             f"Account Creation - User Invalid",
             request,
@@ -55,7 +55,7 @@ async def api_create_account(
     # Password confirmation
     if payload.password != payload.confirm_password:
         log_action(
-            None,
+            current_user.username,
             "account_create",
             f"Account Creation - Passwords do not match",
             request,
@@ -68,7 +68,7 @@ async def api_create_account(
         validate_password_complexity(payload.password)
     except PasswordValidationError as e:
         log_action(
-            None,
+            current_user.username,
             "account_create",
             f"Account Creation - Password invalid",
             request,
@@ -98,7 +98,7 @@ async def api_create_account(
     await db.commit()
     await db.refresh(acc)
     log_action(
-            None,
+            current_user.username,
             "account_create",
             f"Account {acc.username} created successfully",
             request,
@@ -119,9 +119,9 @@ async def list_accounts(
     result = await db.execute(stmt)
     accounts = result.scalars().all()
     log_action(
-        None,
-        "account_create",
-        f"Account Creation - Permission Denied",
+        current_user,
+        "account_query",
+        f"Account View - List Account Page",
         request,
         category="account",
     )        
@@ -141,7 +141,7 @@ async def api_edit_account(
     # Auth check
     if current_user is None or current_user.role != "admin":
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Admin Access Require",
             request,
@@ -154,7 +154,7 @@ async def api_edit_account(
     account = (await db.execute(stmt)).scalar_one_or_none()
     if not account:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Account not found",
             request,
@@ -167,7 +167,7 @@ async def api_edit_account(
     admins = (await db.execute(stmt)).scalars().all()
     if account.role == "admin" and payload.role != "admin" and len(admins) == 1:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Can't change role of last admin",
             request,
@@ -181,7 +181,7 @@ async def api_edit_account(
             validate_username(payload.username)
         except UsernameValidationError as e:
             log_action(
-                None,
+                current_user.username,
                 "account_modify",
                 f"Account Modify - Username is not unique",
                 request,
@@ -224,7 +224,7 @@ async def api_edit_account(
         validate_password_complexity(payload.new_password)
     except PasswordValidationError as e:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Password Complexity didn't meet",
             request,
@@ -243,7 +243,7 @@ async def api_edit_account(
 @router.get("/accounts/me", response_model=AccountRead)
 async def api_get_self(request: Request, current_user: Account = Depends(get_current_user)):
     log_action(
-        None,
+        current_user,
         "account_query",
         f"Account Query - View Self Account",
         request,
@@ -263,7 +263,7 @@ async def api_get_account(
 ):
     if current_user is None or current_user.role != "admin":
         log_action(
-            None,
+            current_user.username,
             "account_query",
             f"Account query - View account to edit - refused due to permission",
             request,
@@ -278,7 +278,7 @@ async def api_get_account(
         raise HTTPException(status_code=404, detail="Account not found")
 
     log_action(
-        None,
+        current_user,
         "account_query",
         f"Account Query - View account to edit",
         request,
@@ -339,7 +339,7 @@ async def api_delete_account(
     # Must be admin
     if current_user is None or current_user.role != "admin":
         log_action(
-            None,
+            current_user.username,
             "account_delete",
             f"Account Delete - Delete account - Refused due to permission",
             request,
@@ -372,7 +372,7 @@ async def api_delete_account(
     accounts = (await db.execute(stmt)).scalars().all()
 
     log_action(
-        None,
+        current_user,
         "account_delete",
         f"Account Delete - Account {Account.username} deleted by {current_user.username}",
         request,
@@ -396,7 +396,7 @@ async def api_update_account_self(
     # Must be logged in
     if current_user is None:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Update self account - refused due to permission",
             request,
@@ -407,7 +407,7 @@ async def api_update_account_self(
     # Only admin or self can update
     if current_user.role != "admin" and current_user.id != user_id:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - only admin can update others' account",
             request,
@@ -421,7 +421,7 @@ async def api_update_account_self(
 
     if not account:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - Account {Account.username} not found",
             request,
@@ -436,7 +436,7 @@ async def api_update_account_self(
     # Username cannot be changed by self
     if payload.username is not None and payload.username != account.username:
         log_action(
-            None,
+            current_user.username,
             "account_modify",
             f"Account Modify - can't change own username {Account.username}",
             request,
@@ -486,7 +486,7 @@ async def api_update_account_self(
     await db.commit()
     await db.refresh(account)
     log_action(
-        current_user.username,
+        current_user,
         "account_modify",
         f"Account Modify - account {current_user.username} updated",
         request,

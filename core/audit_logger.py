@@ -22,10 +22,21 @@ logger.add(
 def log_action(user, action: str, details: str, request: Request,
                status="success", category="general"):
 
+    # Normalize user
+    if hasattr(user, "username"):
+        username = user.username
+        role = getattr(user, "role", None)
+    elif isinstance(user, str):
+        username = user
+        role = None
+    else:
+        username = "anonymous"
+        role = None
+
     record = {
         "timestamp": datetime.utcnow().isoformat(),
-        "user": user.username if user else "anonymous",
-        "role": user.role if user else None,
+        "user": username,
+        "role": role,
         "action": action,
         "category": category,
         "details": details,
@@ -35,3 +46,4 @@ def log_action(user, action: str, details: str, request: Request,
     }
 
     logger.info(json.dumps(record))
+

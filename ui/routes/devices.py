@@ -24,24 +24,82 @@ async def devices_page(
     current_user: Account | None = Depends(get_current_user_optional),
 ):
     if current_user is None:
+        log_action(
+            current_user,
+            "device_view",
+            f"Device View - View Device page - Unauthorized",
+            request,
+            category="device",
+        )  
         return RedirectResponse("/ui/login")
 
     # Load devices from backend API
-    # Load backend URL from settings
+    api_url = f"{settings.backend_url}/api/devices"
 
-    api_url = f"{settings.backend_url}/api/devices/"
-
-# Forward user cookies to API
+    # Forward user cookies to API
     cookies = request.cookies
 
-    api_devices = await request.app.state.http_client.get(
+    api_resp = await request.app.state.http_client.get(
         api_url,
         cookies=cookies
     )
 
-    devices = api_devices.json()
-    # print(devices)
+    # Parse JSON safely
+    try:
+        data = api_resp.json()
 
+    except Exception:
+        log_action(
+            current_user,
+            "device_view",
+            "Device View - Backend returned invalid JSON",
+            request,
+            category="device",
+        )
+        return templates.TemplateResponse(
+            "devices.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "devices": [],
+                "error": "Backend returned invalid JSON"
+            },
+            status_code=500,
+        )
+
+    # Handle backend error response
+    if not data.get("ok"):
+        log_action(
+            current_user,
+            "device_view",
+            f"Device View - Backend error: {data.get('error')}",
+            request,
+            category="device",
+        )
+        return templates.TemplateResponse(
+            "devices.html",
+            {
+                "request": request,
+                "current_user": current_user,
+                "devices": [],
+                "error": data.get("error"),
+            },
+            status_code=500,
+        )
+
+    # Extract device list
+    devices = data.get("devices", [])
+
+    # Log success
+    log_action(
+        current_user,
+        "device_view",
+        "Device View - Logged-in user view device page",
+        request,
+        category="device",
+    )
+
+    # Render template
     return templates.TemplateResponse(
         "devices.html",
         {

@@ -74,7 +74,7 @@ async def startup():
     app.state.config = load_config()
     # Load credentials (ENV → file fallback)
     creds = load_credentials(app.state.config)
-    print("✔ Loaded credentials:", creds)
+    print("✔ Loaded credentials")
 
     # Merge credentials into config so Nagios loader can use them
     if "devices" in app.state.config and "nagios" in app.state.config["devices"]:
@@ -85,10 +85,9 @@ async def startup():
     # Store loader for later use if needed
     app.state.credential_loader = load_credentials
     app.state.ssh_manager = SSHManager(app)
-    print("✔ Loaded configuration:", app.state.config)
+    print("✔ Loaded configuration")
 
     app.state.roles = load_roles()
-
 
     # Create async HTTP client for UI → API calls
     app.state.http_client = httpx.AsyncClient()

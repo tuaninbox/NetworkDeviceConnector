@@ -81,6 +81,14 @@
         onclick="startInteractive()">
         Start Interactive
       </button>
+
+      {% if current_user.role == "admin" %}
+      <button class="bg-blue-600 text-white px-4 py-2 rounded ml-2"
+              onclick="syncDevices()">
+        Sync Devices from Nagios
+      </button>
+      {% endif %}
+
     </div>
 
   </div>
@@ -203,6 +211,27 @@
     });
   });
 
+  window.addEventListener("scroll", () => {
+    const selector = document.querySelector(".md\\:w-1\\/3"); // device selector container
+    const dropdown = document.getElementById("device-dropdown");
+    const arrow = document.getElementById("device-dropdown-arrow");
+
+    const rect = selector.getBoundingClientRect();
+
+    // If selector is no longer fully visible → collapse
+    if (rect.bottom < 0 && !dropdown.classList.contains("hidden")) {
+      dropdown.classList.add("hidden");
+      arrow.textContent = "▼";
+    }
+  });
+
+
+  window.addEventListener("resize", () => {
+    if (fitAddon) {
+      fitAddon.fit();
+      sendResize();
+    }
+  });
   // ---------------------------
   // Initialize Xterm.js Terminal
   // ---------------------------
@@ -263,7 +292,7 @@
   // ---------------------------
   // Show Command Error
   // ---------------------------
-  function showCommandError(msg) {
+  function showMessage(msg) {
     const box = document.getElementById("command-error");
     box.textContent = msg;
     box.classList.remove("hidden");
@@ -282,9 +311,16 @@
     const deviceName = selectedDeviceName;
     const cmd = document.getElementById("command-input").value;
 
+    // No device selected
     if (!deviceId) {
       // showInlinePopup("Select a device first");
-      showCommandError("Select a device first");
+      showMessage("Select a device first");
+      return;
+    }
+
+    // No command entered
+    if (!cmd) {
+      showMessage("Input a command");
       return;
     }
 
@@ -303,13 +339,13 @@
       body: JSON.stringify({ command: cmd })
     });
 
-    if (!resp.ok) {
-      const err = await resp.json();
-      showCommandError(err.detail || "Command failed");
+    const data = await resp.json();
+    if (!data.ok) {
+      showMessage(data.error || "Command failed");
       return;
     }
-    const data = await resp.json();
 
+    // alert(data.output || data.error || JSON.stringify(data));
     // Append output
     deviceOutputs[deviceId] += `\n${deviceName}# ${cmd}\n${data.output}\n`;
 
@@ -365,12 +401,60 @@
     ws.send(`__resize__:${cols}:${rows}`);
   }
 
-  window.addEventListener("resize", () => {
-    if (fitAddon) {
-      fitAddon.fit();
-      sendResize();
+
+  // Sync Device
+  async function syncDevices() {
+    try {
+      // Call backend refresh endpoint
+      const resp = await fetch("/api/devices/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        showMessage(err.detail || "Failed to sync devices from Nagios");
+        return;
+      }
+      else {
+        const stat = await resp.json();
+        showMessage(stat.count || "No devices synced")
+      }
+
+      // Reload device list from backend
+      const listResp = await fetch("/api/devices");
+      if (!listResp.ok) {
+        showMessage("Failed to reload device list");
+        return;
+      }
+      else {
+        const devices = await listResp.json();
+        // Update UI table
+        updateScrollableDeviceList(devices);
+        showMessage("Device list updated");  
+      }  
+    } catch (e) {
+      showMessage("Unexpected error syncing devices");
     }
-  });
+  }
+
+  function updateScrollableDeviceList(devices) {
+    const ul = document.getElementById("device-list-ul");
+
+    let html = "";
+    for (const d of devices) {
+      html += `
+        <li class="px-3 py-2 cursor-pointer hover:bg-gray-100"
+            data-id="${d.id}"
+            data-name="${d.name}"
+            onclick="selectDevice(this, '${d.id}', '${d.name}')">
+          ${d.name} — ${d.ip} — ${d.os} — ${d.location}
+        </li>
+      `;
+    }
+
+    ul.innerHTML = html;
+  }
 
   // ---------------------------
   // Enter key sends command in interactive mode

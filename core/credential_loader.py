@@ -134,21 +134,17 @@ def main():
 
     print("Loading config...")
     config = load_config()
-    print("Loaded config:")
-    print(config)
+    print("Loaded config")
 
     print("\nLoading credentials (ENV → file fallback)...")
     creds = load_credentials(config)
-    print("Loaded credentials:")
-    print(creds)
+    print("Loaded credentials")
 
     # Merge credentials into config
     if "credentials" in config:
         config["credentials"]["loaded"] = creds
 
-    print("\nFinal merged credential structure:")
-    print(config["credentials"]["loaded"])
-
+    print("\nCredential merged to config")
 
 if __name__ == "__main__":
     main()
