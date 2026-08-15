@@ -1,4 +1,4 @@
-import asyncio
+import asyncio, re
 from scrapli.driver.core import (
     AsyncIOSXEDriver,
     AsyncNXOSDriver,
@@ -14,26 +14,33 @@ SCRAPLI_DRIVERS = {
     # "junos": AsyncJunosDriver,
 }
 
+PROMPT_REGEX = re.compile(r"([A-Za-z0-9._-]+(?:\([^)]+\))?#)\s*$")
+
+def extract_prompt(output: str) -> str:
+    lines = output.splitlines()
+    for line in reversed(lines):
+        m = PROMPT_REGEX.search(line.strip())
+        if m:
+            return m.group(1) + " "
+    return "> "  # fallback prompt
+
 
 class SSHManager:
     def __init__(self, app):
         self.app = app
         self.sessions: dict[str, any] = {}
 
+    def get_session(self, device_id):
+        return self.sessions.get(device_id)
 
-    # ---------------------------------------------------------
-    # INTERNAL: Create Scrapli connection
-    # ---------------------------------------------------------
     async def _create_connection(self, device: dict):
         driver_cls = SCRAPLI_DRIVERS.get(device["os"].lower())
         if not driver_cls:
             raise ValueError(f"Unsupported platform: {device['os']}")
 
-        # Device credentials override TACACS
         username = device.get("username")
         password = device.get("password")
 
-        # Lazy-load TACACS credentials only when needed
         if not username or not password:
             creds = self.app.state.credential_loader(self.app.state.config)
             username = creds["tacacs"]["username"] or creds["credentials"]["username"]
@@ -48,43 +55,62 @@ class SSHManager:
             transport="asyncssh",
         )
 
-        await conn.open()
         return conn
 
-
-    # ---------------------------------------------------------
-    # SINGLE COMMAND (stateless)
-    # ---------------------------------------------------------
     async def run_single_command(self, device: dict, command: str) -> str:
         conn = await self._create_connection(device)
+        await conn.open()
         try:
             result = await conn.send_command(command)
             return result.result
         finally:
             await conn.close()
 
-    # ---------------------------------------------------------
-    # INTERACTIVE SESSION (stateful)
-    # ---------------------------------------------------------
-    async def start_session(self, device: dict):
-        conn = await self._create_connection(device)
-        self.sessions[device["id"]] = conn
-        return True
+    # async def start_session(self, device: dict):
+    #     conn = await self._create_connection(device)
+    #     self.sessions[device["id"]] = conn
+    #     return conn
 
-    async def send_interactive(self, device_id: str, command: str) -> str:
+    async def start_session(self, device: dict):
+            conn = await self._create_connection(device)
+            await conn.open()
+    
+            # Force device to send prompt
+            raw = await conn.channel.send_input("")
+            stdout = raw[0].decode(errors="ignore") if isinstance(raw, tuple) else raw
+            prompt = extract_prompt(stdout)
+    
+            # ⭐ FIX: store session using device["id"]
+            self.sessions[device["id"]] = conn
+    
+            return conn, prompt
+    
+    async def send_interactive(self, device_id: str, command: str):
         conn = self.sessions.get(device_id)
         if not conn:
             raise RuntimeError("Session not found")
 
-        result = await conn.send_command(command)
-        return result.result
+        raw = await conn.channel.send_input(command)
+
+        if isinstance(raw, tuple):
+            stdout, stderr = raw
+            stdout = stdout.decode(errors="ignore")
+            stderr = stderr.decode(errors="ignore")
+            output = stdout if stdout.strip() else stderr
+        else:
+            output = raw.decode(errors="ignore") if isinstance(raw, (bytes, bytearray)) else str(raw)
+
+        prompt = extract_prompt(output)
+
+        if not output.strip():
+            output = prompt
+
+        return output, prompt
 
     async def close_session(self, device_id: str):
         conn = self.sessions.pop(device_id, None)
         if conn:
             await conn.close()
-        return True
-
 
 # ---------------------------------------------------------
 # Example usage
@@ -95,10 +121,10 @@ async def main():
     device = {
         "id": "sw01",
         "name": "Core Switch",
-        "ip": "",
-        "username": "",
-        "password": "",
-        "platform": "ios",   # iosxe, nxos, iosxr, junos
+        "ip": "192.168.2.86",
+        "username": "admin",
+        "password": "cisco",
+        "os": "ios",   # iosxe, nxos, iosxr, junos
     }
 
     print("\n--- Single Command ---")

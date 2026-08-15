@@ -2,6 +2,7 @@ from fastapi import APIRouter, Body, HTTPException, Request, WebSocket, WebSocke
 from deps.auth import get_current_user_optional
 from models.account import Account
 from core.audit_logger import log_action
+# from core.ssh_manager import ssh_manager
 router = APIRouter(prefix="/connector", tags=["Device Connector"])
 
 
@@ -135,83 +136,6 @@ async def run_command(
         "output": output
     }
 
-
-# @router.post("/{device_id}/run")
-# async def run_command(request: Request, device_id: str, 
-#                     current_user: Account | None = Depends(get_current_user_optional),
-#                     command: str = Body(..., embed=True)):
-#     device = get_device(request, device_id)
-#     ssh_manager = request.app.state.ssh_manager
-
-#     # allow prefix
-#     allowed_prefixes = ["sh", "show", "ping", "dir"]
-
-#     # Check if command starts with any allowed prefix
-#     if not any(command.lower().startswith(prefix) for prefix in allowed_prefixes):
-#         log_action(
-#             current_user.username,
-#             "command_run",
-#             f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
-#             request,
-#             category="connector",
-#         )
-#         raise HTTPException(
-#             status_code=400,
-#             detail=(
-#                 "Invalid command. Allowed commands must start with: "
-#                 "sh, show, ping, or dir."
-#             )
-#         )
-#     # Block list (dangerous commands)
-#     blocked_keywords = [
-#         # Full dangerous commands
-#         "reload", "reboot", "format", "erase", "delete", "shutdown",
-#         "configure", "conf t", "conf terminal", "debug", "write", "copy",
-
-#         # Short versions
-#         "re ", "re-", "reboot", "wr", "wr mem", "wr memory",
-#         "shut", "del", "deb", "conf", "no ", "no-", "no_"
-#     ]
-
-#     if any(keyword in command for keyword in blocked_keywords):
-#         log_action(
-#             current_user.username,
-#             "command_run",
-#             f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
-#             request,
-#             category="connector",
-#         )
-#         raise HTTPException(
-#             status_code=400,
-#             detail=f"Command '{command}' is blocked for safety reasons."
-#         )
-    
-#     # Prevent command injection attempts
-#     forbidden_chars = [";", "&", "`", "$(", ">", "<", "&&", "||"]
-#     if any(char in command for char in forbidden_chars):
-#         log_action(
-#             current_user.username,
-#             "command_run",
-#             f"Command {command} run on {device["name"]} - {device["ip"]} - rejected",
-#             request,
-#             category="connector",
-#         )
-#         raise HTTPException(
-#             status_code=400,
-#             detail="Invalid command."
-#         )
-
-#     log_action(
-#         current_user,
-#         "command_run",
-#         f"Command \"{command}\" run on {device["name"]} - {device["ip"]} - successfully",
-#         request,
-#         category="connector",
-#     )
-#     output = await ssh_manager.run_single_command(device, command)
-#     return {"output": output}
-
-
 # ---------------------------
 # Start interactive session
 # ---------------------------
@@ -252,54 +176,49 @@ async def close_interactive(device_id: str):
 # 🚀 NEW: WebSocket Interactive Terminal
 # ============================================================
 @router.websocket("/ws/{device_id}")
-async def websocket_terminal(websocket: WebSocket, device_id: str, request: Request):
+async def websocket_terminal(websocket: WebSocket, device_id: str):
     await websocket.accept()
 
-    device = get_device(request, device_id)
+    ssh_manager = websocket.app.state.ssh_manager
+    device = get_device(websocket, device_id)
 
-    # Start or reuse SSH session
+    # Start or reuse session
     session = ssh_manager.get_session(device_id)
     if not session:
-        session = await ssh_manager.start_session(device)
+        conn, prompt = await ssh_manager.start_session(device)
+        await websocket.send_json({
+            "output": f"Connected to {device.get('name')} ({device.get('ip')})\n{prompt}",
+            "prompt": prompt
+        })
+    else:
+        await websocket.send_json({
+            "output": f"Connected to {device.get('name')} ({device.get('ip')})",
+            "prompt": "# "
+        })
 
     try:
-        await websocket.send_text(
-            f"Connected to {device.get('name')} ({device.get('ip')})\n"
-        )
-
         while True:
             data = await websocket.receive_text()
 
-            # Handle terminal resize messages
-            if data.startswith("__resize__"):
-                _, cols, rows = data.split(":")
-                cols = int(cols)
-                rows = int(rows)
-                await session.channel.request_pty(
-                    term_type="xterm",
-                    width=cols,
-                    height=rows
-                )
-                continue
-
-            # Allow user to exit
             if data.strip().lower() in ("exit", ":q", "quit"):
-                await websocket.send_text("\nSession closed.\n")
+                await websocket.send_json({
+                    "output": "\nSession closed.\n",
+                    "prompt": ""
+                })
                 break
 
-            # Send to SSH and stream output back
-            output = await session.send(data)
+            output, prompt = await ssh_manager.send_interactive(device_id, data)
 
-            # Cisco paging detection
-            if "--More--" in output:
-                await session.channel.write(" ")  # send space
-                more_output = await session.channel.read()
-                output += more_output
-
-            await websocket.send_text(output)
+            await websocket.send_json({
+                "output": output,
+                "prompt": prompt
+            })
 
     except WebSocketDisconnect:
         pass
 
     finally:
         await ssh_manager.close_session(device_id)
+
+
+

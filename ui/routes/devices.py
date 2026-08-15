@@ -109,3 +109,6 @@ async def devices_page(
         },
     )
 
+@router.get("/interactive")
+async def interactive_page(request: Request):
+    return templates.TemplateResponse("interactive.html", {"request": request})

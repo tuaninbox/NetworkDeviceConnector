@@ -1,5 +1,6 @@
 from api import device, inventory
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
@@ -33,6 +34,7 @@ from fastapi.responses import RedirectResponse
 app = FastAPI(title="Network Devices")
 # app.add_middleware(AuditMiddleware)
 
+app.mount("/static", StaticFiles(directory="ui/static"), name="static")
 
 # ---------------------------------------------------------
 # Seed admin user
