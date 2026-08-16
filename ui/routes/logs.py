@@ -8,12 +8,26 @@ from deps.auth import get_current_user_optional
 from models.account import Account
 from core.audit_logger import log_action
 from core.settings import settings
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 templates = Jinja2Templates(directory="ui/templates")
 templates.env.cache.clear()
 
 api_base_url = settings.backend_url  # Use the backend URL from settings
+
+
+PERTH_TZ = ZoneInfo("Australia/Perth")
+
+def convert_log_timestamp(log):
+    try:
+        utc_dt = datetime.fromisoformat(log["timestamp"])
+        local_dt = utc_dt.astimezone(PERTH_TZ)
+        log["timestamp"] = local_dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        pass
+    return log
 
 @router.get("/logs", response_class=HTMLResponse)
 async def ui_logs_page(
@@ -53,6 +67,7 @@ async def ui_logs_page(
         )
 
     logs = api_response.json()
+    logs = [convert_log_timestamp(log) for log in logs]
 
     log_action(
         current_user,

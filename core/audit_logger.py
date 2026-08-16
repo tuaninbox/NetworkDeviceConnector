@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime,timezone
 from loguru import logger
 from fastapi import Request
 from core.settings import settings
@@ -34,7 +34,7 @@ def log_action(user, action: str, details: str, request: Request,
         role = None
 
     record = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "user": username,
         "role": role,
         "action": action,

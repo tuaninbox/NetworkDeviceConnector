@@ -131,19 +131,27 @@ async def logout(
             category="authentication",
         )
     else:
-        # Anonymous logout attempt
         log_action(
-            current_user.username,
+            None,
             "logout",
             "Anonymous user attempted logout",
             request,
-            category="",
+            category="authentication",
         )
 
-    # Clear session cookie
+    # Call backend logout to delete DB session
+    cookies = {"session": request.cookies.get("session")}
+    backend_logout_url = f"{settings.backend_url}/api/logout"
+    await request.app.state.http_client.post(
+        backend_logout_url,
+        cookies=cookies
+    )
+
+    # Clear cookie in browser
     response = RedirectResponse("/ui/login")
     response.delete_cookie("session")
     return response
+
 
 
 # @router.get("/ui/restore-admin")

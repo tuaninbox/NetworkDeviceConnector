@@ -306,7 +306,8 @@
 
   function switchToDeviceTab(deviceId) {
     activeDeviceTab = deviceId;
-
+    selectedDeviceId = deviceId;
+    
     const tab = document.getElementById(`tab-${deviceId}`);
     const deviceName = tab.querySelector(".tab-label").textContent;
     selectedDeviceName = deviceName;

@@ -10,39 +10,8 @@ let fitAddon = null;
 //         return;
 //     }
 
-//     document.getElementById("run-output-container").classList.add("hidden");
-//     document.getElementById("terminal-container").classList.remove("hidden");
-//     // document.getElementById("command-header").classList.remove("sticky", "top-0");
-//     // document.getElementById("terminal-container").offsetHeight; 
-
-//     // Close previous WS
-//     if (ws) ws.close();
-
-//     // Create WebSocket FIRST
-//     ws = new WebSocket(`ws://${window.location.host}/connector/ws/${deviceId}`);
-
-//     // THEN init terminal
-//     ws.onopen = () => {
-//         initTerminal();   // <-- moved here
-//         term.write(`\r\n[Interactive session started for ${deviceId}]\r\n`);
-//         sendResize();
-//     };
-
-//     ws.onclose = () => {
-//         term.write(`\r\n[Interactive session closed]\r\n`);
-//         ws = null;
-//     };
+//     window.open(`/ui/interactive?device=${deviceId}`, "_blank");
 // }
-
-function startInteractive() {
-    const deviceId = getSelectedDevice();
-    if (!deviceId) {
-        showMessage("Select a device first");
-        return;
-    }
-
-    window.open(`/ui/interactive?device=${deviceId}`, "_blank");
-}
 
 
   //initTerminal

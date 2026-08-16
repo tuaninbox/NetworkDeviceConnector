@@ -173,52 +173,52 @@ async def close_interactive(device_id: str):
 
 
 # ============================================================
-# 🚀 NEW: WebSocket Interactive Terminal
+# WebSocket Interactive Terminal
 # ============================================================
-@router.websocket("/ws/{device_id}")
-async def websocket_terminal(websocket: WebSocket, device_id: str):
-    await websocket.accept()
+# @router.websocket("/ws/{device_id}")
+# async def websocket_terminal(websocket: WebSocket, device_id: str):
+#     await websocket.accept()
 
-    ssh_manager = websocket.app.state.ssh_manager
-    device = get_device(websocket, device_id)
+#     ssh_manager = websocket.app.state.ssh_manager
+#     device = get_device(websocket, device_id)
 
-    # Start or reuse session
-    session = ssh_manager.get_session(device_id)
-    if not session:
-        conn, prompt = await ssh_manager.start_session(device)
-        await websocket.send_json({
-            "output": f"Connected to {device.get('name')} ({device.get('ip')})\n{prompt}",
-            "prompt": prompt
-        })
-    else:
-        await websocket.send_json({
-            "output": f"Connected to {device.get('name')} ({device.get('ip')})",
-            "prompt": "# "
-        })
+#     # Start or reuse session
+#     session = ssh_manager.get_session(device_id)
+#     if not session:
+#         conn, prompt = await ssh_manager.start_session(device)
+#         await websocket.send_json({
+#             "output": f"Connected to {device.get('name')} ({device.get('ip')})\n{prompt}",
+#             "prompt": prompt
+#         })
+#     else:
+#         await websocket.send_json({
+#             "output": f"Connected to {device.get('name')} ({device.get('ip')})",
+#             "prompt": "# "
+#         })
 
-    try:
-        while True:
-            data = await websocket.receive_text()
+#     try:
+#         while True:
+#             data = await websocket.receive_text()
 
-            if data.strip().lower() in ("exit", ":q", "quit"):
-                await websocket.send_json({
-                    "output": "\nSession closed.\n",
-                    "prompt": ""
-                })
-                break
+#             if data.strip().lower() in ("exit", ":q", "quit"):
+#                 await websocket.send_json({
+#                     "output": "\nSession closed.\n",
+#                     "prompt": ""
+#                 })
+#                 break
 
-            output, prompt = await ssh_manager.send_interactive(device_id, data)
+#             output, prompt = await ssh_manager.send_interactive(device_id, data)
 
-            await websocket.send_json({
-                "output": output,
-                "prompt": prompt
-            })
+#             await websocket.send_json({
+#                 "output": output,
+#                 "prompt": prompt
+#             })
 
-    except WebSocketDisconnect:
-        pass
+#     except WebSocketDisconnect:
+#         pass
 
-    finally:
-        await ssh_manager.close_session(device_id)
+#     finally:
+#         await ssh_manager.close_session(device_id)
 
 
 

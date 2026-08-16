@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt
 from passlib.context import CryptContext
 from time import time
@@ -29,7 +29,7 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_access_token(data: dict, expires_minutes: int | None = None) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(
+    expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.jwt_exp_minutes
     )
     to_encode.update({"exp": expire})
