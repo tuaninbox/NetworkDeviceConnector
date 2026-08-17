@@ -220,17 +220,17 @@ async def api_edit_account(
         account.password_hash = hash_password(payload.new_password)
 
         # Password complexity check
-    try:
-        validate_password_complexity(payload.new_password)
-    except PasswordValidationError as e:
-        log_action(
-            current_user.username,
-            "account_modify",
-            f"Account Modify - Password Complexity didn't meet",
-            request,
-            category="account",
-        )  
-        raise HTTPException(status_code=400, detail=str(e))
+        try:
+            validate_password_complexity(payload.new_password)
+        except PasswordValidationError as e:
+            log_action(
+                current_user.username,
+                "account_modify",
+                f"Account Modify - Password Complexity didn't meet",
+                request,
+                category="account",
+            )  
+            raise HTTPException(status_code=400, detail=str(e))
 
     await db.commit()
     await db.refresh(account)

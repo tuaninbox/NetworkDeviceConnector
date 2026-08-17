@@ -6,6 +6,7 @@ roles:
     - update_accounts
     - delete_accounts
     - read_logs
+    - sync_nagios
 
   operator:
     - read_devices

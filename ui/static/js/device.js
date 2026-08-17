@@ -147,30 +147,28 @@
         headers: { "Content-Type": "application/json" }
       });
 
-      if (!resp.ok) {
-        const err = await resp.json();
-        showMessage(err.detail || "Failed to sync devices from Nagios");
+      showMessage(`Syncing....Please wait!`);
+      
+      const stat = await resp.json();
+      
+      // Backend returns ok: true/false
+      if (!stat.ok) {
+        showMessage(stat.error || "Failed to sync devices from Nagios");
         return;
-      }
-      else {
-        const stat = await resp.json();
-        showMessage(stat.count || "No devices synced")
       }
 
-      // Reload device list from backend
+      // Success
+      showMessage(`Synced ${stat.count} devices`);
+
+      // Reload device list
       const listResp = await fetch("/api/devices");
-      if (!listResp.ok) {
-        showMessage("Failed to reload device list");
-        return;
-      }
-      else {
-        const devices = await listResp.json();
-        // Update UI table
-        updateScrollableDeviceList(devices);
-        showMessage("Device list updated");  
-      }  
+      const devices = await listResp.json();
+
+      updateScrollableDeviceList(devices.devices);
+      showMessage(`Device list updated - ${devices.count} devices`);
+
     } catch (e) {
-      showMessage("Unexpected error syncing devices");
+      showMessage(`Unexpected error syncing devices: ${e}`);
     }
   }
 

@@ -100,7 +100,7 @@ async def sync_devices_from_nagios(
     log_action(
         current_user.username,
         "device_sync",
-        f"Nagios Sync - Success ({len(devices)} devices)",
+        f"Nagios Sync - Successfully - ({len(devices)} devices)",
         request,
         category="inventory",
     )

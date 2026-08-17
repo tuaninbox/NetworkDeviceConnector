@@ -1,5 +1,5 @@
 devices:
-  source: "file"   # nagios or "file"
+  source: "nagios"   # nagios or "file"
 
   file_path: "devices.csv"
 
