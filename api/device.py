@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Body, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
-from deps.auth import get_current_user_optional
+from deps.auth import get_current_user
 from models.account import Account
 from core.audit_logger import log_action
 # from core.ssh_manager import ssh_manager
@@ -21,9 +21,10 @@ def get_device(request: Request, device_id: str) -> dict:
 async def run_command(
     request: Request,
     device_id: str,
-    current_user: Account | None = Depends(get_current_user_optional),
+    current_user: Account | None = Depends(get_current_user),
     command: str = Body(..., embed=True)
 ):
+    
     device = get_device(request, device_id)
     ssh_manager = request.app.state.ssh_manager
 

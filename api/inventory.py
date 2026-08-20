@@ -19,6 +19,19 @@ async def list_devices(
     request: Request,
     current_user: Account = Depends(get_current_user),
 ):
+    roles = request.app.state.roles
+    if not has_permission(current_user.role, "read_device", roles):
+        log_action(
+            current_user.username,
+            "device_read",
+            "Device Read - Permission Denied",
+            request,
+            category="inventory",
+        )
+        return {
+            "ok": False,
+            "error": "Permission denied"
+        }
     cfg = request.app.state.config
     source = cfg["devices"]["source"]
 
